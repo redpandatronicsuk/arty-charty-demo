@@ -676,6 +676,9 @@ class App extends Component {
           animationType={"slide"}
           transparent={true}
           visible={this.state.showMoreCharts}
+          onRequestClose={() => {
+
+          }}
           >
          <ScrollView style={{
            paddingTop: 22,
@@ -739,6 +742,9 @@ class App extends Component {
           animationType={"fade"}
           transparent={true}
           visible={this.state.showSelectCityModal}
+          onRequestClose={() => {
+            
+          }}
           >
           <View style={{
           flexDirection: 'column',
