@@ -6,7 +6,7 @@ Demo app showcasing charts from ARTy Charty React Native plugin.
 See the code in the `src` folder for how the charts where produced and 
 how to use the callback functions to have the charts interact with the app.
 
-# Usage
+### Usage --REDO THIS!!!!
 To compile the app ensure that you have React Native and npm installed.
 Then in the base directory:
 ```
@@ -25,4 +25,8 @@ Click on the **+** button below the list.
 3. In the window that pops up select `libART.a` and click the *Add* button.
 
 ![XCode instructions 1](https://github.com/redpandatronicsuk/arty-charty-demo/raw/master/stuff/xcode-instructions-1.png)
-![XCode instructions 2](https://github.com/redpandatronicsuk/arty-charty-demo/raw/master/stuff/xcode-instructions-1.png)
+![XCode instructions 2](https://github.com/redpandatronicsuk/arty-charty-demo/raw/master/stuff/xcode-instructions-2.png)
+
+### Notes
+#### Android
+NOt need to loink, but not working...
