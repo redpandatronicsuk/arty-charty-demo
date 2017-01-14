@@ -190,6 +190,10 @@ function makeSpline(x,y,px1,py1,px2,py2,x2,y2)
   return `C ${px1} ${py1} ${px2} ${py2} ${x2} ${y2}`;
 }
 
+function makeCircle(cx, cy, r) {
+  return `M${cx - r},${cy}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 -${r * 2},0`;
+}
+
 /**
  * From:
  *   https://www.particleincell.com/wp-content/uploads/2012/06/bezier-spline.js
@@ -512,6 +516,7 @@ export {
   tintColor,
   shadeColor,
   computeSplineControlPoints,
+  makeCircle,
   makeSpline
  }
 

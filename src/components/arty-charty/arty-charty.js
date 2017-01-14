@@ -12,7 +12,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
-import {AmimatedCirclesMarker, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints} from '.';
+import {Tweener, AmimatedCirclesMarker, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle} from '.';
 import {Spring,Bounce,EasingFunctions} from '../../timing-functions';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
@@ -31,6 +31,7 @@ const PAD_LEFT = 10;
 const SHOW_CLICKS = false;
 
 const CHART_GROW_ANIMATION_DURATION = 2000;
+const CLICK_FEDDBACK_ANIMATION_DURATION = 500;
 
 const POINTS_ON_SCREEN = 8;
 
@@ -38,13 +39,16 @@ const CHART_HEIGHT = 250;
 const CHART_HEIGHT_OFFSET = CHART_HEIGHT / 2;
 
 // TO-DO:
-// ARTy Sparky: spark line charts
 // Bubble click feedback!!!
 
 class ArtyCharty extends Component {
   constructor(props) {
     super(props);
     this.resetState();
+    console.log('making tweener');
+    let twn = new Tweener(5000, t=> {
+      console.log('tweener', t);
+    }, EasingFunctions.bounce);
   }
 
   resetState () {
@@ -52,32 +56,44 @@ class ArtyCharty extends Component {
       trX: 0,
       t: 0,
       gradientStops: {},
-      activeMarker: {}
+      activeMarker: {},
+      clickFeedback: {
+        x: 0,
+        y: 0,
+        o: 0,
+        r: 0
+      }
     };
     this.maxScroll = 0;
+    this.stopAnimateClickFeedback = false;
   }
 
   componentWillMount() {
-    //this.initChart();
     // Compute constants for all charts, such as maxValues:
     this.animateChartSpring = new Spring({friction: 150, frequency: 500});
     this.animateChartSpring2 = new Spring({friction: 150, frequency: 550, anticipationSize: 50});
     this.computeChartConstants();
+    //this.yAxis = this.makeYaxis(5, this.minValue, this.maxValue);
+    this.yAxis = this.makeYaxis(5, 0, this.maxValue);
     this.initChartGrowAnimations();
     this.initPanHandler();
   }
 
   componentDidMount() {
+    this.mounted = true;
     this.animating = true;
     this.animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
   }
 
   computeChartConstants() {
     this.maxValue = Number.MIN_VALUE;
+    this.minValue = Number.MAX_VALUE;
     this.props.data.forEach(d => {
-      let val = this.getMaxValue(d.data);
-      d.maxValue = val;
-      this.maxValue = Math.max(this.maxValue, val);
+      let val = this.getMinMaxValues(d.data);
+      d.maxValue = val.maxValue;
+      d.minValue = val.minValue;
+      this.maxValue = Math.max(this.maxValue, val.maxValue);
+      this.minValue = Math.min(this.minValue, val.minValue);
     });
   }
 
@@ -153,6 +169,16 @@ class ArtyCharty extends Component {
             .refs
             .chart
             .measure((fx, fy, width, height, px, py) => {
+              this.setState(Object.assign(this.state, {
+                clickFeedback: {
+                  x: tmpX - px,
+                  y: tmpY - py + CHART_HEIGHT / 2,
+                  o: 0,
+                  r: 0
+                }
+              }));
+              // Add stop aniamtion stuff in case clicked twice!!!!
+              this.animateClickFeedback(Date.now() + CLICK_FEDDBACK_ANIMATION_DURATION);
               this.props.data.some((d, idx) => {
                 if (d.type === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
                   let closestMarker = this.findClosestMarker(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
@@ -185,10 +211,9 @@ class ArtyCharty extends Component {
     if (this.props.data !== nextProps.data ||
      this.props.pointsOnScreen !== nextProps.pointsOnScreen) {
       this.props = nextProps;
-      //this.initChart();
-      //this.computeChartConstants();
       this.resetState();
       this.computeChartConstants();
+      this.yAxis = this.makeYaxis(5, 0, this.maxValue);
     this.initChartGrowAnimations();
     this.initPanHandler();
     if (!this.animating) {
@@ -196,6 +221,10 @@ class ArtyCharty extends Component {
       this.animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
     }
     }
+  }
+
+  componentWillUnmount() {
+    this.mounted = false;
   }
 
   findClosestMarker(points, x, y) {
@@ -242,56 +271,19 @@ class ArtyCharty extends Component {
       return gradStops;
   }
 
-  getMaxValue(arr) {
-    let maxValue = 0
+  getMinMaxValues(arr) {
+    let maxValue = Number.MIN_VALUE;
+    let minValue = Number.MAX_VALUE;
     arr
       .forEach((d) => {
         if (d.value > maxValue) {
           maxValue = d.value;
         }
+        if (d.value < minValue) {
+          minValue = d.value;
+        }
       });
-      return maxValue;
-  }
-
-  /**
-   * Function to create the SVG paths for the bar chart.
-   */
-  makePathAndMarkersBar(containerWidth, ts, maxValue) {
-    let heightScaler = (CHART_HEIGHT-MARKER_RADIUS)/maxValue;
-    xSpacing = containerWidth / (this.props.pointsOnScreen || POINTS_ON_SCREEN);
-    let barWidth = xSpacing - PAD_LEFT;
-    var width = containerWidth;
-    let fullWidth = PAD_LEFT/2 + (PAD_LEFT+barWidth) * (this.props.data.length-1) + barWidth;
-    var max = 0,pathStr = [], xCord;
-    this.barCords = [];
-    // Make bars:
-    this.props.data.forEach((d, idx) => {
-      let x1 = PAD_LEFT/2 + (PAD_LEFT+barWidth) * idx;
-      let y1 = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler * ts[idx % ts.length];
-      let y2 = (CHART_HEIGHT+CHART_HEIGHT_OFFSET);
-      pathStr.push('M');
-      pathStr.push(x1);
-      pathStr.push(y2);
-      pathStr.push('H');
-      pathStr.push(x1 + barWidth);
-      pathStr.push('V');
-      pathStr.push(y1);
-      pathStr.push('H');
-      pathStr.push(x1);
-      pathStr.push('V');
-      pathStr.push(y2);
-      this.barCords.push({x1: x1, x2: x1+barWidth, y1: y1, y2: y2});
-  });
-  // Force render update:
-  this.forceUpdate();
-    let viewBox = (fullWidth - xSpacing*4) + ' ' + (-CHART_HEIGHT) + ' ' + width + MARKER_RADIUS + ' ' + CHART_HEIGHT;
-    return {
-      viewBox,
-      bars: pathStr.join(' '),
-      width: fullWidth,
-      height: CHART_HEIGHT,
-      maxScroll: fullWidth - containerWidth
-    };
+      return {maxValue, minValue};
   }
 
   makeBarsChartPath(chart, width, t) {
@@ -327,7 +319,7 @@ class ArtyCharty extends Component {
     return {
       path: pathStr.join(' '),
       width: fullWidth,
-      maxScroll: fullWidth - width +300,
+      maxScroll: fullWidth - width,
       barCords: barCords
     };
   }
@@ -363,7 +355,8 @@ class ArtyCharty extends Component {
     return {
       path: areaStrArray.join(' '),
       width: xCord + MARKER_RADIUS,
-      maxScroll: xCord - width + MARKER_RADIUS
+      //maxScroll: xCord - width + MARKER_RADIUS
+      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
     };
   }
 
@@ -393,7 +386,8 @@ class ArtyCharty extends Component {
     return {
       path: lineStrArray.join(' '),
       width: xCord + MARKER_RADIUS,
-      maxScroll: xCord - width + MARKER_RADIUS
+      //maxScroll: xCord - width + MARKER_RADIUS
+      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
     };
   }
 
@@ -432,7 +426,8 @@ class ArtyCharty extends Component {
     return {
       path: splines.join(','),
       width: xCords.slice(-1) + MARKER_RADIUS,
-      maxScroll: xCords.slice(-1) - width + MARKER_RADIUS
+      // maxScroll: xCords.slice(-1) - width + MARKER_RADIUS
+      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
     };
   }
 
@@ -472,6 +467,22 @@ makeMarker(cx, cy, chartIdx, pointIdx) {
     );
   }
 
+makeYaxis(num, minVal, maxVal) {
+  let topY = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - this.maxValue * ((CHART_HEIGHT-MARKER_RADIUS)/this.maxValue);
+  let bottomY = CHART_HEIGHT+CHART_HEIGHT/2;
+  let i;
+  let interval = (bottomY - topY) / num;
+  let lineVal = this.maxValue;
+  let lineDecrement = (maxVal - minVal) / num;
+  let lines = [];
+  for (i = 0 ; i <= num; i++) {
+    lines.push(<Shape key={i} strokeDash={[0, 0, 4, 6]} stroke="black" strokeWidth={.5}  d={`M 0 ${topY + interval * i} H ${Dimensions.get('window').width}`} />);
+    lines.push(<ART.Text key={1000+i} fill="black" stroke="white" strokeWidth={1} x={0} y={(topY + interval * i) - 22} font="20px Arial">{lineVal.toFixed(2)}</ART.Text>);
+    lineVal -= lineDecrement;
+  }
+  return lines;
+}
+
 animateChart(endTime) {
   requestAnimationFrame(timestamp => {
     if (timestamp >= endTime) {
@@ -484,6 +495,28 @@ animateChart(endTime) {
         t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
       }));
       this.animateChart(endTime);
+    }
+  });
+}
+
+animateClickFeedback(endTime) {
+  requestAnimationFrame(timestamp => {
+    if (timestamp >= endTime) {
+      return this.setState(Object.assign(this.state, this.state.clickFeedback, {
+          o: 0,
+          r: 0
+        }));
+    } else {
+      // this.setState(Object.assign(this.state, {
+      //   t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
+      // }));
+      this.setState(Object.assign(this.state, 
+        Object.assign(this.state.clickFeedback, {
+          o: (endTime - timestamp) / CLICK_FEDDBACK_ANIMATION_DURATION,
+          r: 300 * (1 - (endTime - timestamp) / CLICK_FEDDBACK_ANIMATION_DURATION)
+        })
+      ));
+      this.animateClickFeedback(endTime);
     }
   });
 }
@@ -586,36 +619,34 @@ animateChart(endTime) {
                 chartData.width,
                 0
             )} />);
-            // return <Shape
-            //       d={this.state.chartData.bars}
-            //       stroke="rgba(255,255,255,.5)"
-            //       strokeWidth={3}
-            //       fill={new LinearGradient(
-            //       this.state.gradientStops || {
-            //       '0': 'rgba(0,0,255,0.2)',
-            //       '0.25':'rgba(125,0,255,.5)',
-            //       '0.5':'rgba(255,0,125,.5)',
-            //       '1':'rgba(0,0,255,.2)'
-            //     },
-            //     0,
-            //     0,
-            //     this.state.chartData.width,
-            //     0
-            // )} />
        }
        return charts;
      });
     return (
-        <View {...this._panResponder.panHandlers} style={[styles.container, {
+      <View>
+        <View style={[styles.container, {
           transform: [{translateX: this.state.trX}],
           width: width
         }]}
         ref="chart" >
           <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
-          style={{backgroundColor: 'rgba(0,0,0,0)', overflow: 'visible', marginTop: -CHART_HEIGHT/2}}>
+          style={{
+            backgroundColor: 'rgba(0,0,0,0)', overflow: 'visible', marginTop: -CHART_HEIGHT/2}}>
           {charts}
+          <Shape d={makeCircle(this.state.clickFeedback.x, this.state.clickFeedback.y, this.state.clickFeedback.r)} fill={`rgba(255,255,255, ${this.state.clickFeedback.o})`} />
         </Surface>
         </View>
+        <View {...this._panResponder.panHandlers} style={{
+          position: 'absolute',
+          top: 10,
+          left: 0
+        }}>
+          <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
+          style={{backgroundColor: 'rgba(0,0,0,0)', overflow: 'visible', marginTop: -CHART_HEIGHT/2}}>
+           {this.yAxis}
+        </Surface>
+        </View>
+      </View>
     );
   }
 }
