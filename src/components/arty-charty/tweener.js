@@ -1,8 +1,14 @@
 class Tweener {
-    constructor(duration, cb, timingFunction) {
+    constructor(duration, cb, timingFunction, autoStart) {
         this.cb = cb;
         this.timingFunction = timingFunction;
-        this.setDurationFromNowAndPlay(duration);
+
+        autoStart === false 
+        ? 
+            this.setDurationFrom(duration)
+        :
+            this.setDurationFromNowAndPlay(duration)
+        ;
     }
 
     start() {
@@ -12,27 +18,40 @@ class Tweener {
 
     play() {
         if (this.playing) {
-            requestAnimationFrame(timestamp => {
+            this.afid = requestAnimationFrame(timestamp => {
                 if (timestamp < this.endTime) {
                     this.cb(this.timingFunction(1 - (this.endTime - Date.now()) / this.duration));
-                    // this.cb(1 - (this.endTime - Date.now()) / this.duration);
-                    return this.play();
+                    this.play();
                 } else {
+                    this.playing = false;
                     this.cb(1);
                 }
             });
         }
-        // this.playing ? requestAnimationFrame(cb) : null;
+    }
+
+     setDurationFrom(duration) {
+        this.duration = duration;
+        this.endTime = duration + Date.now();
     }
 
     setDurationFromNowAndPlay(duration) {
-        this.duration = duration;
-        this.endTime = duration + Date.now();
+        this.setDurationFrom(duration);
+        this.start();
+    }
+
+    resetAndPlay() {
+        this.endTime = this.duration + Date.now();
         this.start();
     }
 
     stop() {
+        cancelAnimationFrame(this.afid);
         this.playing = false;
+    }
+
+    isPlaying() {
+        return this.playing;
     }
 }
 

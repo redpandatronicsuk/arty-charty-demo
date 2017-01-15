@@ -506,6 +506,27 @@ function hueshiftColor(col, amount) {
   });
 }
 
+function getMinMaxValues(arr) {
+    let maxValue = Number.MIN_VALUE;
+    let minValue = Number.MAX_VALUE;
+    arr
+      .forEach((d) => {
+        if (d.value > maxValue) {
+          maxValue = d.value;
+        }
+        if (d.value < minValue) {
+          minValue = d.value;
+        }
+      });
+      return {maxValue, minValue};
+  }
+
+  function  computeChartSum(chart) {
+    return chart.data.reduce((a,b) => { 
+      return a + b.value;
+    },0);
+  }
+
 export { 
   makeArc,
   inerpolateColors,
@@ -517,7 +538,9 @@ export {
   shadeColor,
   computeSplineControlPoints,
   makeCircle,
-  makeSpline
+  makeSpline,
+  getMinMaxValues,
+  computeChartSum
  }
 
 // complement color

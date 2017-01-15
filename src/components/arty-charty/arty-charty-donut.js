@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
 import {Spring,EasingFunctions} from '../../timing-functions';
-import {makeArc} from '.';
+import {makeArc, computeChartSum, Tweener} from '.';
 
 const CHART_GROW_ANIMATION_DURATION = 3000;
 const SELECTED_SLICE_ANIMATION_DURATION = 750;
@@ -24,11 +24,9 @@ class ArtyChartyDonut extends Component {
     super(props);
     this.state = {
       t: 0,
-      t2: 0,
       rotation: new Animated.Value(0),
       scale: new Animated.Value(0),
-      selectedSlice: null,
-      previousSelectedSlice: null
+      selectedSlice: null
     };
     this.spring = new Spring({friction: 5, frequency: 200});
     this.spring2 = new Spring({friction: 5, frequency: 100});
@@ -43,7 +41,7 @@ class ArtyChartyDonut extends Component {
       if (d1.r > this.maxR) {
         this.maxR = d1.r;
       }
-      let sum = this._computeSum(d1.data);
+      let sum = computeChartSum(d1);
       d1.data.forEach((d, idx) => {
         let arcLength = d.value/sum*360;
         let endAngle = startAngle + arcLength;
@@ -56,6 +54,9 @@ class ArtyChartyDonut extends Component {
         startAngle = endAngle;
       });
     });
+    this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
+        this.setState(Object.assign(this.state, {t}));
+    }, EasingFunctions.bounce, false);
   }
 
   componentDidMount() {
@@ -81,6 +82,10 @@ class ArtyChartyDonut extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
+  }
+
+  componentWillUnmount() {
+    this.animateChartTweener.stop();
   }
 
   _computeChartData() {
@@ -131,10 +136,8 @@ class ArtyChartyDonut extends Component {
           }
         });
         this.setState(Object.assign(this.state, {
-          selectedSlice: clickedSlice,
-          previousSelectedSlice: this.state.selectedSlice
+          selectedSlice: clickedSlice
         }));
-        this._animateActiveSlice(Date.now() + SELECTED_SLICE_ANIMATION_DURATION);
         if (this.props.onSliceClick) {
           this.props.onSliceClick(this.slices[clickedSlice].dataSetIdx, this.slices[clickedSlice].pointIdx);
         }
@@ -142,41 +145,8 @@ class ArtyChartyDonut extends Component {
     }
   }
 
-  _computeSum(arr) {
-    return arr.reduce((a,b) => { 
-      return a + b.value;
-    },0);
-  }
-
   _animateChart(endTime) {
-    requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      this.animating = false;
-      return this.setState(Object.assign(this.state, {
-        t: 1
-      }));
-    } else {
-      this.setState(Object.assign(this.state, {
-        t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
-      }));
-      this._animateChart(endTime);
-    }
-  });
-  }
-
-  _animateActiveSlice(endTime) {
-    requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      return this.setState(Object.assign(this.state, {
-        t2: 1
-      }));
-    } else {
-      this.setState(Object.assign(this.state, {
-        t2: 1 - (endTime - timestamp) / SELECTED_SLICE_ANIMATION_DURATION
-      }));
-      this._animateActiveSlice(endTime);
-    }
-  });
+    this.animateChartTweener.resetAndPlay();
   }
 
   render() {

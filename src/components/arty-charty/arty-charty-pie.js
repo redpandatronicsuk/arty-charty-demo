@@ -5,7 +5,6 @@ import {
   Dimensions,
   Image,
   Responder,
-  StyleSheet,
   Text,
   View,
   ART,
@@ -14,7 +13,7 @@ import {
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
 import {Spring,EasingFunctions} from '../../timing-functions';
-import {makeArc} from '.';
+import {makeArc, Tweener, computeChartSum} from '.';
 
 const CHART_GROW_ANIMATION_DURATION = 3000;
 const SELECTED_SLICE_ANIMATION_DURATION = 750;
@@ -35,7 +34,7 @@ class ArtyChartyPie extends Component {
   }
 
   componentWillMount() {
-    this.props.max ? this.sum = this.props.max : this.sum = this._computeSum();
+    this.props.max ? this.sum = this.props.max : this.sum = computeChartSum(this.props.data);
     this.slices = [];
     let startAngle = 0;
     this.props.data.data.forEach((d, idx) => {
@@ -50,7 +49,16 @@ class ArtyChartyPie extends Component {
       });
       startAngle = endAngle;
     });
-    Animated.parallel([
+    this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
+        this.setState(Object.assign(this.state, {t}));
+    }, EasingFunctions.bounce, false);
+    this.animateActiveSliceTweener = new Tweener(SELECTED_SLICE_ANIMATION_DURATION, t2 => {
+        this.setState(Object.assign(this.state, {t2}));
+    }, EasingFunctions.linear, false);
+  }
+
+  componentDidMount() {
+     Animated.parallel([
       Animated.timing(
       this.state.rotation,
       {
@@ -66,15 +74,17 @@ class ArtyChartyPie extends Component {
         easing: Easing.bounce
       }
     )
-    ]).start();;
-  }
-
-  componentDidMount() {
-    this._animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
+    ]).start();
+    this._animateChart();
     this._initPanHandler();
   }
 
-  componentWillReceiveProps(nextProps) {
+  // componentWillReceiveProps(nextProps) {
+  // }
+
+  componentWillUnmount() {
+    this.animateChartTweener.stop();
+    this.animateActiveSliceTweener.stop();
   }
 
   _onLayout(layout) {
@@ -105,7 +115,7 @@ class ArtyChartyPie extends Component {
           selectedSlice: clickedSlice,
           previousSelectedSlice: this.state.selectedSlice
         }));
-        this._animateActiveSlice(Date.now() + SELECTED_SLICE_ANIMATION_DURATION);
+        this._animateActiveSlice();
         if (this.props.onSliceClick) {
           this.props.onSliceClick(clickedSlice);
         }
@@ -113,41 +123,12 @@ class ArtyChartyPie extends Component {
     }
   }
 
-  _computeSum() {
-    return this.props.data.data.reduce((a,b) => { 
-      return a + b.value;
-    },0);
-  }
-
   _animateChart(endTime) {
-    requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      this.animating = false;
-      return this.setState(Object.assign(this.state, {
-        t: 1
-      }));
-    } else {
-      this.setState(Object.assign(this.state, {
-        t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
-      }));
-      this._animateChart(endTime);
-    }
-  });
+    this.animateChartTweener.resetAndPlay();
   }
 
   _animateActiveSlice(endTime) {
-    requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      return this.setState(Object.assign(this.state, {
-        t2: 1
-      }));
-    } else {
-      this.setState(Object.assign(this.state, {
-        t2: 1 - (endTime - timestamp) / SELECTED_SLICE_ANIMATION_DURATION
-      }));
-      this._animateActiveSlice(endTime);
-    }
-  });
+    this.animateActiveSliceTweener.resetAndPlay();
   }
 
   render() {
@@ -158,7 +139,7 @@ class ArtyChartyPie extends Component {
       let cx = this.state.selectedSlice === idx ? r + d.vector.x * this.spring.interpolate(this.state.t2) * 10 : this.state.previousSelectedSlice === idx ? r + d.vector.x * this.spring2.interpolate(1-this.state.t2) * 10 : r;
       let cy = this.state.selectedSlice === idx ? r + d.vector.y * this.spring.interpolate(this.state.t2) * 10 : this.state.previousSelectedSlice === idx ? r + d.vector.y * this.spring2.interpolate(1-this.state.t2) * 10 : r;
       pieSlices.push(<Shape key={idx}
-          d={makeArc(cx, cy,r * .9, d.startAngle, d.startAngle + EasingFunctions.bounce(this.state.t) * (d.arcLength-1e-12), true)}
+          d={makeArc(cx, cy,r * .9, d.startAngle, d.startAngle + this.state.t * (d.arcLength-1e-12), true)}
           fill={this.props.data.data[idx].color}
           stroke="rgba(255,255,255,.5)"
           strokeWidth={this.state.selectedSlice === idx ? 5 : 0}
@@ -182,8 +163,5 @@ class ArtyChartyPie extends Component {
     );
   }
 }
-
-const styles = StyleSheet.create({
-});
 
 export default ArtyChartyPie;

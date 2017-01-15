@@ -12,7 +12,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
-import {Tweener, AmimatedCirclesMarker, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle} from '.';
+import {Tweener, AmimatedCirclesMarker, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues} from '.';
 import {Spring,Bounce,EasingFunctions} from '../../timing-functions';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
@@ -38,17 +38,10 @@ const POINTS_ON_SCREEN = 8;
 const CHART_HEIGHT = 250;
 const CHART_HEIGHT_OFFSET = CHART_HEIGHT / 2;
 
-// TO-DO:
-// Bubble click feedback!!!
-
 class ArtyCharty extends Component {
   constructor(props) {
     super(props);
     this.resetState();
-    console.log('making tweener');
-    let twn = new Tweener(5000, t=> {
-      console.log('tweener', t);
-    }, EasingFunctions.bounce);
   }
 
   resetState () {
@@ -77,6 +70,14 @@ class ArtyCharty extends Component {
     this.yAxis = this.makeYaxis(5, 0, this.maxValue);
     this.initChartGrowAnimations();
     this.initPanHandler();
+    this.animateClickFeedbackTweener = new Tweener(CLICK_FEDDBACK_ANIMATION_DURATION, t => {
+          this.setState(Object.assign(this.state, 
+              Object.assign(this.state.clickFeedback, {
+                o: 1 - t,
+                r: 300 * t
+              })
+        ));
+    }, EasingFunctions.easeInCubic, false);
   }
 
   componentDidMount() {
@@ -89,7 +90,7 @@ class ArtyCharty extends Component {
     this.maxValue = Number.MIN_VALUE;
     this.minValue = Number.MAX_VALUE;
     this.props.data.forEach(d => {
-      let val = this.getMinMaxValues(d.data);
+      let val = getMinMaxValues(d.data);
       d.maxValue = val.maxValue;
       d.minValue = val.minValue;
       this.maxValue = Math.max(this.maxValue, val.maxValue);
@@ -169,16 +170,7 @@ class ArtyCharty extends Component {
             .refs
             .chart
             .measure((fx, fy, width, height, px, py) => {
-              this.setState(Object.assign(this.state, {
-                clickFeedback: {
-                  x: tmpX - px,
-                  y: tmpY - py + CHART_HEIGHT / 2,
-                  o: 0,
-                  r: 0
-                }
-              }));
-              // Add stop aniamtion stuff in case clicked twice!!!!
-              this.animateClickFeedback(Date.now() + CLICK_FEDDBACK_ANIMATION_DURATION);
+              this.animateClickFeedback(tmpX - px, tmpY - py + CHART_HEIGHT / 2);
               this.props.data.some((d, idx) => {
                 if (d.type === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
                   let closestMarker = this.findClosestMarker(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
@@ -225,6 +217,7 @@ class ArtyCharty extends Component {
 
   componentWillUnmount() {
     this.mounted = false;
+    this.animateClickFeedbackTweener.stop();
   }
 
   findClosestMarker(points, x, y) {
@@ -269,21 +262,6 @@ class ArtyCharty extends Component {
         color;
       });
       return gradStops;
-  }
-
-  getMinMaxValues(arr) {
-    let maxValue = Number.MIN_VALUE;
-    let minValue = Number.MAX_VALUE;
-    arr
-      .forEach((d) => {
-        if (d.value > maxValue) {
-          maxValue = d.value;
-        }
-        if (d.value < minValue) {
-          minValue = d.value;
-        }
-      });
-      return {maxValue, minValue};
   }
 
   makeBarsChartPath(chart, width, t) {
@@ -499,26 +477,17 @@ animateChart(endTime) {
   });
 }
 
-animateClickFeedback(endTime) {
-  requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      return this.setState(Object.assign(this.state, this.state.clickFeedback, {
-          o: 0,
-          r: 0
-        }));
-    } else {
-      // this.setState(Object.assign(this.state, {
-      //   t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
-      // }));
-      this.setState(Object.assign(this.state, 
-        Object.assign(this.state.clickFeedback, {
-          o: (endTime - timestamp) / CLICK_FEDDBACK_ANIMATION_DURATION,
-          r: 300 * (1 - (endTime - timestamp) / CLICK_FEDDBACK_ANIMATION_DURATION)
-        })
-      ));
-      this.animateClickFeedback(endTime);
-    }
-  });
+animateClickFeedback(x, y) {
+  this.animateClickFeedbackTweener.stop();
+  this.setState(Object.assign(this.state, {
+      clickFeedback: {
+        x: x,
+        y: y,
+        o: 0,
+        r: 0
+      }
+  }));
+  this.animateClickFeedbackTweener.resetAndPlay();
 }
 
   render() {
