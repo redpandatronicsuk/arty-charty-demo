@@ -154,7 +154,9 @@ const colorNames = {
 };
 
 /**
- * SVG functions
+ * =====================================================
+ * ================== SVG FUNCTIONS ====================
+ * =====================================================
  */
 function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
   var angleInRadians = (angleInDegrees-90) * Math.PI / 180.0;
@@ -251,6 +253,131 @@ function computeSplineControlPoints(K)
 	
 	return {p1:p1, p2:p2};
 }
+
+function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    let xSpacing = width / pointsOnScreen;
+    let barWidth = xSpacing - paddingLeft;
+    let fullWidth = paddingLeft/2 + (paddingLeft+barWidth) * (chart.data.length-1) + barWidth;
+    let pathStr = []
+    let barCords = [];
+    chart.data.some((d, idx) => {
+        let x1 = paddingLeft/2 + (paddingLeft+barWidth) * idx;
+        if (x1 > fullWidth * t && chart.drawChart) {
+          return true;
+        }
+        if (chart.stretchChart) {
+          x1 = x1 * t;
+        }
+    let y1 = (chartHeight+chartHeightOffset) - d.value * heightScaler * chart.timingFunctions[idx % chart.timingFunctions.length](t);
+        let y2 = (chartHeight+chartHeightOffset);
+        pathStr.push('M');
+        pathStr.push(x1);
+        pathStr.push(y2);
+        pathStr.push('H');
+        pathStr.push(x1 + barWidth);
+        pathStr.push('V');
+        pathStr.push(y1);
+        pathStr.push('H');
+        pathStr.push(x1);
+        pathStr.push('V');
+        pathStr.push(y2);
+        barCords.push({x1: x1, x2: x1+barWidth, y1: y1, y2: y2});
+    });
+    return {
+      path: pathStr.join(' '),
+      width: fullWidth,
+      maxScroll: fullWidth - width,
+      barCords: barCords
+    };
+  }
+
+  function makeXcord(chart, fullWidth, t, spacing, markerRadius) {
+    if (chart.drawChart) {
+          return Math.min(fullWidth * t, spacing + markerRadius);
+        } else if (chart.stretchChart) {
+          return t * (spacing + markerRadius);
+        } else {
+          return spacing + markerRadius;
+        }
+  }
+
+  function makeAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
+    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, true);
+  }
+
+  function makeLineChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
+    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, false);
+  }
+
+   function makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, makeArea) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    let xSpacing = width / pointsOnScreen;
+    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+
+    let lineStrArray = makeArea ? ['M' + markerRadius, chartHeight+chartHeightOffset] : [];
+    let xCord;
+    chart.data.some((d, idx) => {
+    let spacing = idx*xSpacing;
+        if (spacing > fullWidth * t && chart.drawChart) {
+          return true;
+        }
+        xCord = makeXcord(chart, fullWidth, t, spacing, markerRadius);
+        // Move line to to next x-coordinate:
+        lineStrArray.push((idx > 0 || makeArea ? 'L' : 'M') + xCord);
+        // And y-cordinate:
+        let yCord = (chartHeight+chartHeightOffset) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t);
+        lineStrArray.push(yCord);
+    });
+    if (makeArea) {
+      lineStrArray.push('L' + xCord);
+      lineStrArray.push(chartHeight+chartHeightOffset);
+      lineStrArray.push('Z');
+    }
+    return {
+      path: lineStrArray.join(' '),
+      width: xCord + markerRadius,
+      maxScroll: fullWidth - xSpacing + markerRadius
+    };
+  }
+
+  function makeSplineChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, closePath) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    let xSpacing = width / pointsOnScreen;
+    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+    let xCord;
+    let xCords = [];
+    let yCords = [];
+    chart.data.forEach((d, idx) => {
+        let spacing = idx*xSpacing;
+        if (spacing > fullWidth * t && chart.drawChart) {
+          return true;
+        }
+        xCord = makeXcord(chart, fullWidth, t, spacing, markerRadius);
+        xCords.push(xCord);
+        yCords.push((chartHeight+chartHeightOffset) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t));
+    });
+    let px = computeSplineControlPoints(xCords);
+	  let py = computeSplineControlPoints(yCords);
+    let splines = [`M ${xCords[0]} ${yCords[0]}`];
+      for (i=0;i<xCords.length-1;i++) {
+        splines.push(makeSpline(xCords[i],yCords[i],px.p1[i],py.p1[i],px.p2[i],py.p2[i],xCords[i+1],yCords[i+1]));
+      }
+      if (closePath) { // close for area spline graph
+        splines.push(`V ${chartHeight+chartHeightOffset} H ${xCords[0]} Z`);
+      }
+    return {
+      path: splines.join(','),
+      width: xCords.slice(-1) + markerRadius,
+      maxScroll: fullWidth - xSpacing + markerRadius
+    };
+  }
+
+/**
+ * =====================================================
+ * ================ COLOUR FUNCTIONS ===================
+ * =====================================================
+ */
 
 /**
  * Converts an HSL color value to RGB. Conversion formula
@@ -527,6 +654,47 @@ function getMinMaxValues(arr) {
     },0);
   }
 
+   /**
+   * Find the index of the rectangle that contains a given
+   * coordinate.
+   * @param {array} points - Array of rectangles, each rectangle is of the form
+   *                         {x1: number, x2: number, y1: number, y2: number},
+   *                         where x1 and x2 are the minimum and maximum x coordinates
+   *                         and y1 and y3 are the minimum and maximum x coordinates.
+   * @param {number} x     - The x coordinate
+   * @param {number} y     - The y coordinate
+   */
+  function findRectangleIndexContainingPoint(rectangles, x, y) {
+    let closestIdx;
+    rectangles.some((d, idx) => {
+      if ((d.x1 <= x && x <= d.x2) && (d.y1 <= y && y <= d.y2)) {
+        closestIdx = idx;
+        return true;
+      }
+      return false;
+    });
+    return closestIdx;
+  }
+
+  /**
+   * Find the index of the closest coordinate to a
+   * reference coordinate in an array of coordinates.
+   * If no point is found within the threshold distance
+   * undefined is returned.
+   */
+  function findClosestPointIndexWithinRadius(points, x, y, radiusThreshold) {
+    let closestIdx;
+    let closestDist = Number.MAX_VALUE;
+    points.forEach((d, idx) => {
+      let distSqrd = Math.pow(d.x - x, 2) + Math.pow(d.y - y, 2); // changeto: (d.x - x)**2 + (d.y - y)**2;
+      if (distSqrd < closestDist && distSqrd < radiusThreshold) {
+        closestIdx = idx;
+        closestDist = distSqrd;
+      }
+    });
+    return closestIdx;
+  }
+
 export { 
   makeArc,
   inerpolateColors,
@@ -540,9 +708,14 @@ export {
   makeCircle,
   makeSpline,
   getMinMaxValues,
-  computeChartSum
+  computeChartSum,
+  findRectangleIndexContainingPoint,
+  findClosestPointIndexWithinRadius,
+  makeBarsChartPath,
+  makeAreaChartPath,
+  makeLineChartPath,
+  makeSplineChartPath
  }
 
+// TO-DO:
 // complement color
-// interpolate color
-// lighten, darken, saturate, ...

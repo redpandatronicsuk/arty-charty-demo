@@ -12,7 +12,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
-import {Tweener, AmimatedCirclesMarker, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues} from '.';
+import {Tweener, AmimatedCirclesMarker, makeBarsChartPath, makeAreaChartPath, makeLineChartPath, makeSplineChartPath, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues, findRectangleIndexContainingPoint, findClosestPointIndexWithinRadius} from '.';
 import {Spring,Bounce,EasingFunctions} from '../../timing-functions';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
@@ -37,6 +37,8 @@ const POINTS_ON_SCREEN = 8;
 
 const CHART_HEIGHT = 250;
 const CHART_HEIGHT_OFFSET = CHART_HEIGHT / 2;
+
+const DEFAULT_LINE_COLOR = 'rgba(255,255,255,.5)';
 
 class ArtyCharty extends Component {
   constructor(props) {
@@ -84,7 +86,6 @@ class ArtyCharty extends Component {
   }
 
   componentDidMount() {
-    this.mounted = true;
     this.animateChart();
   }
 
@@ -143,6 +144,10 @@ class ArtyCharty extends Component {
       });
   }
 
+  /**
+   * Initialise the pan handler used for horizontal scrolling
+   * and click handling.
+   */
   initPanHandler() {
     let sX;
     let moved = false;
@@ -175,13 +180,13 @@ class ArtyCharty extends Component {
               this.animateClickFeedback(tmpX - px, tmpY - py + CHART_HEIGHT / 2);
               this.props.data.some((d, idx) => {
                 if (d.type === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
-                  let closestMarker = this.findClosestMarker(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
+                  let closestMarker = findClosestPointIndexWithinRadius(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2, MARKER_RADIUS_SQUARED);
                   if (closestMarker !== undefined) {
                     this.onMarkerClick(idx, closestMarker);
                     return true;
                   }
                 } else if (d.type === 'bars') {
-                  let clickedBar = this.findClickedBar(d.barCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
+                  let clickedBar = findRectangleIndexContainingPoint(d.barCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
                   if (clickedBar !== undefined) {
                     this.onMarkerClick(idx, clickedBar);
                     // Only return true if this is the last chart, there might be line charts infront..
@@ -218,33 +223,8 @@ componentWillReceiveProps(nextProps) {
 }
 
   componentWillUnmount() {
-    this.mounted = false;
     this.animateClickFeedbackTweener.stop();
-  }
-
-  findClosestMarker(points, x, y) {
-    let closestIdx;
-    let closestDist = Number.MAX_VALUE;
-    points.forEach((d, idx) => {
-      let distSqrd = Math.pow(d.x - x, 2) + Math.pow(d.y - y, 2); // changeto: (d.x - x)**2 + (d.y - y)**2;
-      if (distSqrd < closestDist && distSqrd < MARKER_RADIUS_SQUARED) {
-        closestIdx = idx;
-        closestDist = distSqrd;
-      }
-    });
-    return closestIdx;
-  }
-
-  findClickedBar(points, x, y) {
-    let closestIdx;
-    points.some((d, idx) => {
-      if ((d.x1 <= x && x <= d.x2) && (d.y1 <= y && y <= d.y2)) {
-        closestIdx = idx;
-        return true;
-      }
-      return false;
-    });
-    return closestIdx;
+    this.animateChartTweener.stop();
   }
 
   onMarkerClick(chartIdx, pointIdx) {
@@ -264,151 +244,6 @@ componentWillReceiveProps(nextProps) {
         color;
       });
       return gradStops;
-  }
-
-  makeBarsChartPath(chart, width, t) {
-    let heightScaler = (CHART_HEIGHT-MARKER_RADIUS)/this.maxValue;
-    let xSpacing = width / (this.props.pointsOnScreen || POINTS_ON_SCREEN);
-    let barWidth = xSpacing - PAD_LEFT;
-    let fullWidth = PAD_LEFT/2 + (PAD_LEFT+barWidth) * (chart.data.length-1) + barWidth;
-    let pathStr = []
-    let barCords = [];
-    chart.data.some((d, idx) => {
-        let x1 = PAD_LEFT/2 + (PAD_LEFT+barWidth) * idx;
-        if (x1 > fullWidth * t && chart.drawChart) {
-          return true;
-        }
-        if (chart.stretchChart) {
-          x1 = x1 * t;
-        }
-    let y1 = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler * chart.timingFunctions[idx % chart.timingFunctions.length](t);
-        let y2 = (CHART_HEIGHT+CHART_HEIGHT_OFFSET);
-        pathStr.push('M');
-        pathStr.push(x1);
-        pathStr.push(y2);
-        pathStr.push('H');
-        pathStr.push(x1 + barWidth);
-        pathStr.push('V');
-        pathStr.push(y1);
-        pathStr.push('H');
-        pathStr.push(x1);
-        pathStr.push('V');
-        pathStr.push(y2);
-        barCords.push({x1: x1, x2: x1+barWidth, y1: y1, y2: y2});
-    });
-    return {
-      path: pathStr.join(' '),
-      width: fullWidth,
-      maxScroll: fullWidth - width,
-      barCords: barCords
-    };
-  }
-
-  makeAreaChartPath(chart, width, t) {
-    let heightScaler = (CHART_HEIGHT-MARKER_RADIUS)/this.maxValue;
-    let xSpacing = width / (this.props.pointsOnScreen || POINTS_ON_SCREEN);
-    let fullWidth = xSpacing*(chart.data.length-1) + MARKER_RADIUS;
-    let areaStrArray = ['M' + MARKER_RADIUS, CHART_HEIGHT+CHART_HEIGHT_OFFSET];
-    let xCord;
-    chart.data.some((d, idx) => {
-      let spacing = idx*xSpacing;
-      if (spacing > fullWidth * t && chart.drawChart) {
-          return true;
-        }
-        if (chart.drawChart) {
-          xCord = Math.min(fullWidth * t, spacing + MARKER_RADIUS);
-        } else if (chart.stretchChart) {
-          xCord = t * (idx*xSpacing + MARKER_RADIUS);
-        } else {
-          xCord = idx*xSpacing + MARKER_RADIUS;
-        }
-    //xCord = (chart.drawChart ? t : 1) * (idx*xSpacing + MARKER_RADIUS);
-        // Move line to to next x-coordinate:
-        areaStrArray.push('L' + xCord);
-        // And y-cordinate:
-        let yCord = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t);
-        areaStrArray.push(yCord);
-    });
-    areaStrArray.push('L' + xCord);
-    areaStrArray.push(CHART_HEIGHT+CHART_HEIGHT_OFFSET);
-    areaStrArray.push('Z');
-    return {
-      path: areaStrArray.join(' '),
-      width: xCord + MARKER_RADIUS,
-      //maxScroll: xCord - width + MARKER_RADIUS
-      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
-    };
-  }
-
-  makeLineChartPath(chart, width, t) {
-    let heightScaler = (CHART_HEIGHT-MARKER_RADIUS)/this.maxValue;
-    let xSpacing = width / (this.props.pointsOnScreen || POINTS_ON_SCREEN);
-    let fullWidth = xSpacing*(chart.data.length-1) + MARKER_RADIUS;
-    let lineStrArray = []
-    let xCord;
-    chart.data.some((d, idx) => {
-    //xCord = (chart.drawChart ? t : 1) * (idx*xSpacing + MARKER_RADIUS);
-    let spacing = idx*xSpacing;
-        if (spacing > fullWidth * t && chart.drawChart) {
-          return true;
-        }
-        if (chart.drawChart) {
-          xCord = Math.min(fullWidth * t, spacing + MARKER_RADIUS);
-        } else if (chart.stretchChart) {
-          xCord = t * (idx*xSpacing + MARKER_RADIUS);
-        } else {
-          xCord = idx*xSpacing + MARKER_RADIUS;
-        }
-        lineStrArray.push((idx ? 'L' : 'M') + xCord);
-        let yCord = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t);
-        lineStrArray.push(yCord);
-    });
-    return {
-      path: lineStrArray.join(' '),
-      width: xCord + MARKER_RADIUS,
-      //maxScroll: xCord - width + MARKER_RADIUS
-      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
-    };
-  }
-
-  makeSplineChartPath(chart, width, t, closePath) {
-    // Add length parameter which is used as Math.max(maxLength, xCord???)
-    let heightScaler = (CHART_HEIGHT-MARKER_RADIUS)/this.maxValue;
-    let xSpacing = width / (this.props.pointsOnScreen || POINTS_ON_SCREEN);
-    let fullWidth = xSpacing*(chart.data.length-1) + MARKER_RADIUS;
-    let xCord;
-    let xCords = [];
-    let yCords = [];
-    chart.data.forEach((d, idx) => {
-        let spacing = idx*xSpacing;
-        if (spacing > fullWidth * t && chart.drawChart) {
-          return true;
-        }
-        if (chart.drawChart) {
-          xCord = Math.min(fullWidth * t, spacing + MARKER_RADIUS);
-        } else if (chart.stretchChart) {
-          xCord = t * (idx*xSpacing + MARKER_RADIUS);
-        } else {
-          xCord = idx*xSpacing + MARKER_RADIUS;
-        }
-        xCords.push(xCord);
-        yCords.push((CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t));
-    });
-    let px = computeSplineControlPoints(xCords);
-	  let py = computeSplineControlPoints(yCords);
-    let splines = [`M ${xCords[0]} ${yCords[0]}`];
-      for (i=0;i<xCords.length-1;i++) {
-        splines.push(makeSpline(xCords[i],yCords[i],px.p1[i],py.p1[i],px.p2[i],py.p2[i],xCords[i+1],yCords[i+1]));
-      }
-      if (closePath) { // close for area spline graph
-        splines.push(`V ${CHART_HEIGHT+CHART_HEIGHT_OFFSET} H ${xCords[0]} Z`);
-      }
-    return {
-      path: splines.join(','),
-      width: xCords.slice(-1) + MARKER_RADIUS,
-      // maxScroll: xCords.slice(-1) - width + MARKER_RADIUS
-      maxScroll: fullWidth - xSpacing + MARKER_RADIUS
-    };
   }
 
 makeMarkersCoords(chart, width, t) {
@@ -480,12 +315,12 @@ animateClickFeedback(x, y) {
   this.animateClickFeedbackTweener.resetAndPlay();
 }
 
+makeLinearGradientForAreaChart(chart, idx, width) {
+  return new LinearGradient(this.makeGradStops(chart.maxValue, idx), 0, 0, width, 0);
+}
+
   render() {
     let width = Dimensions.get('window').width;
-    // Move currentMonth computation outside of render!
-    let currentMonth = this.state.activeMarker.chartIdx !== undefined ?
-     new Date(this.props.data[this.state.activeMarker.chartIdx].data[this.state.activeMarker.pointIdx].date).getMonth() :
-     null;
      let charts = this.props.data.map((chart, idx) =>  {
        let chartData;
        let charts = [];
@@ -493,30 +328,26 @@ animateClickFeedback(x, y) {
        let makeMarkers = true;
        switch (chart.type) {
          case 'area':
-            chartData = this.makeAreaChartPath(chart, width, this.state.t);
+            chartData = makeAreaChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
+           this.props.pointsOnScreen || POINTS_ON_SCREEN);
             // Max assumes chart doesn't shrink subsequently. If that is the case,weneed to
             // recomputmax for all!!
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
             // this.maxScroll = chartData.maxScroll;
             charts.push(<Shape key={idx} d={chartData.path}
-              fill={new LinearGradient(
-                  this.makeGradStops(chart.maxValue, idx),
-                0,
-                0,
-                chartData.width,
-                0
-            )}
+              fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)}
             />);
             if (chart.hideLine) {
               break;
             }
           case 'line':
-            chartData = this.makeLineChartPath(chart, width, this.state.t);
+            chartData = makeLineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
+           this.props.pointsOnScreen || POINTS_ON_SCREEN);
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
             charts.push(<Shape
                   key={idx + 10000} 
                   d={chartData.path}
-                  stroke={chart.lineColor || "rgba(255,255,255,.5)"}
+                  stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={3} />);
             // Make marker coords:
             markerCords = this.makeMarkersCoords(chart, width, this.state.t);
@@ -524,19 +355,15 @@ animateClickFeedback(x, y) {
             charts.push(this.makeMarkers(markerCords, idx));
             break;
           case 'spline-area':
-            chartData = this.makeSplineChartPath(chart, width, this.state.t, true);
+            //chartData = this.makeSplineChartPath(chart, width, this.state.t, true);
+            chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
+            this.props.pointsOnScreen || POINTS_ON_SCREEN, true);
               charts.push(<Shape
                   key={idx + 30000} 
                   d={chartData.path}
-                  stroke={chart.lineColor || "rgba(255,255,255,.5)"}
+                  stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={0}
-                  fill={new LinearGradient(
-                  this.makeGradStops(chart.maxValue, idx),
-                0,
-                0,
-                chartData.width,
-                0
-            )} />);
+                  fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)} />);
             //charts.push(this.makeMarkers(markerCords, idx));
             if (chart.hideLine) {
               // Make marker coords:
@@ -547,12 +374,14 @@ animateClickFeedback(x, y) {
               break;
             }
           case 'spline':
-            chartData = this.makeSplineChartPath(chart, width, this.state.t, false);
+            // chartData = this.makeSplineChartPath(chart, width, this.state.t, false);
+            chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
+            this.props.pointsOnScreen || POINTS_ON_SCREEN, false);
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
             charts.push(<Shape
                   key={idx + 10000} 
                   d={chartData.path}
-                  stroke={chart.lineColor || "rgba(255,255,255,.5)"}
+                  stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={3}
                    />);
             // Make marker coords:
@@ -563,21 +392,16 @@ animateClickFeedback(x, y) {
             }
             break;
           case 'bars':
-            chartData = this.makeBarsChartPath(chart, width, this.state.t);
+          chartData = makeBarsChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
+           this.props.pointsOnScreen || POINTS_ON_SCREEN, PAD_LEFT);
             chart.barCords = chartData.barCords;
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
             charts.push(<Shape
                   key={idx + 20000} 
                   d={chartData.path}
-                  stroke={chart.lineColor || "rgba(255,255,255,.5)"}
+                  stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={3}
-                  fill={new LinearGradient(
-                  this.makeGradStops(chart.maxValue, idx),
-                0,
-                0,
-                chartData.width,
-                0
-            )} />);
+                  fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)} />);
        }
        return charts;
      });

@@ -251,7 +251,7 @@ class App extends Component {
             })
         },
         {
-            type: 'spline',
+            type: 'line',
             label: 'Low temperature',
             lineColor: 'rgba(0,0,255,.5)',
             drawChart: true,
@@ -287,7 +287,8 @@ class App extends Component {
       ],
       Sunshine: [
         {
-            type: 'spline-area',
+            //type: 'spline-area',
+            type: 'area',
             label: 'Sunshine hours',
             lineColor: 'rgba(255,255,0,.5)',
             highCol: 'rgb(255,255,0)',
