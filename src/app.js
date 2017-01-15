@@ -188,10 +188,10 @@ function formatDonutData(arr, data) {
 }
 
 const images = {
-  spring: require('./spring.jpg'),
-  summer: require('./summer.jpg'),
-  autumn: require('./autumn.jpg'),
-  winter: require('./winter.jpg')
+  spring: require('../assets/img/spring.jpg'),
+  summer: require('../assets/img/summer.jpg'),
+  autumn: require('../assets/img/autumn.jpg'),
+  winter: require('../assets/img/winter.jpg')
 };
 
 class App extends Component {
