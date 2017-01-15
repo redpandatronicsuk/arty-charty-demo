@@ -78,12 +78,14 @@ class ArtyCharty extends Component {
               })
         ));
     }, EasingFunctions.easeInCubic, false);
+    this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
+          this.setState(Object.assign(this.state, {t}));
+    }, EasingFunctions.linear, false);
   }
 
   componentDidMount() {
     this.mounted = true;
-    this.animating = true;
-    this.animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
+    this.animateChart();
   }
 
   computeChartConstants() {
@@ -199,21 +201,21 @@ class ArtyCharty extends Component {
     });
   }
 
-  componentWillReceiveProps(nextProps) {
-    if (this.props.data !== nextProps.data ||
-     this.props.pointsOnScreen !== nextProps.pointsOnScreen) {
-      this.props = nextProps;
-      this.resetState();
-      this.computeChartConstants();
-      this.yAxis = this.makeYaxis(5, 0, this.maxValue);
+componentWillReceiveProps(nextProps) {
+  if (this.props.data !== nextProps.data || this.props.pointsOnScreen !== nextProps.pointsOnScreen) {
+    this.props = nextProps;
+    this.resetState();
+    this.computeChartConstants();
+    this.yAxis = this.makeYaxis(5, 0, this.maxValue);
     this.initChartGrowAnimations();
     this.initPanHandler();
-    if (!this.animating) {
-      this.animating = true;
-      this.animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
-    }
-    }
+    // Uncoment if statement to only restart animation
+    // if it isn't already playing when switching charts
+    // if (!this.animateChartTweener.isPlaying()) {
+      this.animateChart();
+    // }
   }
+}
 
   componentWillUnmount() {
     this.mounted = false;
@@ -462,19 +464,7 @@ makeYaxis(num, minVal, maxVal) {
 }
 
 animateChart(endTime) {
-  requestAnimationFrame(timestamp => {
-    if (timestamp >= endTime) {
-      this.animating = false;
-      return this.setState(Object.assign(this.state, {
-        t: 1
-      }));
-    } else {
-      this.setState(Object.assign(this.state, {
-        t: 1 - (endTime - timestamp) / CHART_GROW_ANIMATION_DURATION
-      }));
-      this.animateChart(endTime);
-    }
-  });
+  this.animateChartTweener.resetAndPlay();
 }
 
 animateClickFeedback(x, y) {

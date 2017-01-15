@@ -17,17 +17,16 @@ class Tweener {
     }
 
     play() {
-        if (this.playing) {
-            this.afid = requestAnimationFrame(timestamp => {
-                if (timestamp < this.endTime) {
-                    this.cb(this.timingFunction(1 - (this.endTime - Date.now()) / this.duration));
-                    this.play();
-                } else {
-                    this.playing = false;
-                    this.cb(1);
-                }
-            });
-        }
+        this.afid = requestAnimationFrame(timestamp => {
+            if (timestamp < this.endTime) {
+                let timeLeft = this.endTime - timestamp;
+                this.cb(this.timingFunction(1 - timeLeft / this.duration), timeLeft);
+                this.play();
+            } else {
+                this.playing = false;
+                this.cb(1, 0);
+            }
+        });
     }
 
      setDurationFrom(duration) {

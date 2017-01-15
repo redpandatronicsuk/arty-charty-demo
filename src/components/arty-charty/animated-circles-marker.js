@@ -12,8 +12,8 @@ import {
   StatusBar
 } from 'react-native';
 const {Group, Shape} = ART;
-import {Spring} from '../../timing-functions';
-import {lightenColor} from '.';
+import {Spring, EasingFunctions} from '../../timing-functions';
+import {lightenColor, Tweener, makeCircle} from '.';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
 const SELCTED_MARKER_ANIMATION_DELAY_1 = SELCTED_MARKER_ANIMATION_DURATION * .2;
@@ -31,10 +31,6 @@ const spring1 = new Spring({friction: 300, frequency: 500});
 const spring2 = new Spring({friction: 300, frequency: 400});
 const spring3 = new Spring({friction: 300, frequency: 600});
 
-function makeCircle(cx, cy, r) {
-  return `M${cx - r},${cy}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 -${r * 2},0`;
-}
-
 class AmimatedCirclesMarker extends Component {
   constructor(props) {
     super(props);
@@ -44,83 +40,60 @@ class AmimatedCirclesMarker extends Component {
         r3: 0
     };
     this.active = this.props.active;
-    // If active, start animation....
+    this.tweenerStartAnimation = new Tweener(START_ANIMATION_DURATION, t => {
+          this.setState({
+              r1: t,
+              r2: 0,
+              r3: 0
+          });
+    }, spring2.interpolate.bind(spring2), false);
+    this.tweenerActiveAnimation = new Tweener(SELCTED_MARKER_ANIMATION_DURATION, (t, timeLeft) => {
+          this.setState({
+              r1: spring1.interpolate(t),
+              r2: spring2.interpolate(1 - (timeLeft / (SELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_1))),
+              r3: spring3.interpolate(1 - (timeLeft / (SELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_2)))
+          });
+    }, EasingFunctions.linear, false);
+    this.tweenerInactiveAnimation = new Tweener(UNSELCTED_MARKER_ANIMATION_DURATION, (t, timeLeft) => {
+          this.setState({
+              r1: spring1.interpolate(t),
+              r2: spring2.interpolate(timeLeft / (UNSELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_1)),
+              r3: spring3.interpolate(timeLeft / (UNSELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_2))
+          });
+    }, EasingFunctions.linear, false);
+    // If active, start animation???
   }
 
   componentDidMount() {
     this.startAnimationPlaying = true;
-    this._playStartAnimation(Date.now() + START_ANIMATION_DURATION);
+    this._playStartAnimation();
   }
 
   componentWillReceiveProps(nextProps) {
       if (nextProps.active !== this.active) {
         this.active = nextProps.active;
-          nextProps.active ? this._playActiveAnimation(Date.now() + SELCTED_MARKER_ANIMATION_DURATION) : this._playInactiveAnimation(Date.now() + UNSELCTED_MARKER_ANIMATION_DURATION);
+          nextProps.active ? this._playActiveAnimation() : this._playInactiveAnimation();
       }
   }
 
-  _playStartAnimation(endTime) {
-    requestAnimationFrame((timestamp) => {
-        let timeLeft = endTime - timestamp;
-        let progress = 1 - (timeLeft / START_ANIMATION_DURATION);
-      if (progress < 1 && this.startAnimationPlaying) {
-          this.setState({
-              r1: spring2.interpolate(progress),
-              r2: 0,
-              r3: 0
-          });
-          this._playStartAnimation(endTime);
-      } else if (this.startAnimationPlaying) {
-        this.startAnimationPlaying = false;
-        this.setState({
-              r1: 1,
-              r2: 0,
-              r3: 0
-          });
-      }
-    });
+  componentWillUnmount() {
+    this.tweenerActiveAnimation.stop();
+    this.tweenerInactiveAnimation.stop();
+    this.tweenerStartAnimation.stop();
+    this.startAnimationPlaying = false;
+    this.active= false;
   }
 
-  _playActiveAnimation(endTime) {
-    requestAnimationFrame((timestamp) => {
-        let timeLeft = endTime - timestamp;
-        let progressLongest = 1 - (timeLeft / SELCTED_MARKER_ANIMATION_DURATION);
-      if (progressLongest < 1 && this.active) {
-          this.setState({
-              r1: spring1.interpolate(progressLongest),
-              r2: spring2.interpolate(1 - (timeLeft / (SELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_1))),
-              r3: spring3.interpolate(1 - (timeLeft / (SELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_2)))
-          });
-          this._playActiveAnimation(endTime);
-      } else {
-        this.setState({
-              r1: 1,
-              r2: 1,
-              r3: 1
-          });
-      }
-    })
+  _playStartAnimation() {
+    this.tweenerStartAnimation.resetAndPlay();
   }
 
-  _playInactiveAnimation(endTime) {
-    requestAnimationFrame((timestamp) => {
-        let timeLeft = endTime - timestamp;
-        let progressLongest = timeLeft / UNSELCTED_MARKER_ANIMATION_DURATION;
-      if (progressLongest > 0 && !this.active) {
-          this.setState({
-              r1: spring1.interpolate(progressLongest),
-              r2: spring2.interpolate(timeLeft / (UNSELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_1)),
-              r3: spring3.interpolate(timeLeft / (UNSELCTED_MARKER_ANIMATION_DURATION - SELCTED_MARKER_ANIMATION_DELAY_2))
-          });
-          this._playInactiveAnimation(endTime);
-      } else {
-        this.setState({
-              r1: 1,
-              r2: 0,
-              r3: 0
-          });
-      }
-    })
+  _playActiveAnimation() {
+    this.tweenerActiveAnimation.resetAndPlay();
+  }
+
+  _playInactiveAnimation() {
+    this.tweenerInactiveAnimation.resetAndPlay();
   }
 
   _makeMarker(cx, cy) {
@@ -135,11 +108,6 @@ class AmimatedCirclesMarker extends Component {
 
   render() {
       return this._makeMarker(this.props.cx, this.props.cy);
-  }
-
-  componentWillUnmount() {
-    this.startAnimationPlaying = false;
-    this.active= false;
   }
 }
 
