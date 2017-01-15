@@ -77,7 +77,7 @@ class ArtyChartyDonut extends Component {
       }
     )
     ]).start();
-    this._animateChart(Date.now() + CHART_GROW_ANIMATION_DURATION);
+    this._animateChart();
     this._initClickHandler();
   }
 
@@ -145,7 +145,7 @@ class ArtyChartyDonut extends Component {
     }
   }
 
-  _animateChart(endTime) {
+  _animateChart() {
     this.animateChartTweener.resetAndPlay();
   }
 
