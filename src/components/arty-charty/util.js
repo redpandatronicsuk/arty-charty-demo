@@ -269,7 +269,7 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
         if (chart.stretchChart) {
           x1 = x1 * t;
         }
-    let y1 = (chartHeight+chartHeightOffset) - d.value * heightScaler * chart.timingFunctions[idx % chart.timingFunctions.length](t);
+    let y1 = (chartHeight+chartHeightOffset) - d.value * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
         let y2 = (chartHeight+chartHeightOffset);
         pathStr.push('M');
         pathStr.push(x1);
@@ -326,7 +326,7 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
         // Move line to to next x-coordinate:
         lineStrArray.push((idx > 0 || makeArea ? 'L' : 'M') + xCord);
         // And y-cordinate:
-        let yCord = (chartHeight+chartHeightOffset) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t);
+        let yCord = (chartHeight+chartHeightOffset) - d.value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
         lineStrArray.push(yCord);
     });
     if (makeArea) {
@@ -345,6 +345,7 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
     let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+
     let xCord;
     let xCords = [];
     let yCords = [];
@@ -355,7 +356,7 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
         }
         xCord = makeXcord(chart, fullWidth, t, spacing, markerRadius);
         xCords.push(xCord);
-        yCords.push((chartHeight+chartHeightOffset) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t));
+        yCords.push((chartHeight+chartHeightOffset) - d.value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1));
     });
     let px = computeSplineControlPoints(xCords);
 	  let py = computeSplineControlPoints(yCords);
@@ -379,6 +380,15 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
  * =====================================================
  */
 
+function hue2rgb(p, q, t){
+      if(t < 0) t += 1;
+      if(t > 1) t -= 1;
+      if(t < 1/6) return p + (q - p) * 6 * t;
+      if(t < 1/2) return q;
+      if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+  }
+
 /**
  * Converts an HSL color value to RGB. Conversion formula
  * adapted from http://en.wikipedia.org/wiki/HSL_color_space.
@@ -398,14 +408,6 @@ function hslToRgb(h, s, l){
     if(s == 0){
         r = g = b = l; // achromatic
     }else{
-        var hue2rgb = function hue2rgb(p, q, t){
-            if(t < 0) t += 1;
-            if(t > 1) t -= 1;
-            if(t < 1/6) return p + (q - p) * 6 * t;
-            if(t < 1/2) return q;
-            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-            return p;
-        }
         var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         var p = 2 * l - q;
         r = hue2rgb(p, q, h + 1/3);
@@ -633,6 +635,13 @@ function hueshiftColor(col, amount) {
   });
 }
 
+function complement(color) {
+  let rgb = parseColor(color);
+  let hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  hsl[0] = (hsl[0] + .5) % 1;
+  return hslToRgb(...hsl);
+}
+
 function getMinMaxValues(arr) {
     let maxValue = Number.MIN_VALUE;
     let minValue = Number.MAX_VALUE;
@@ -704,6 +713,7 @@ export {
   hueshiftColor,
   tintColor,
   shadeColor,
+  complement,
   computeSplineControlPoints,
   makeCircle,
   makeSpline,

@@ -614,6 +614,9 @@ class App extends Component {
           data={this.data[this.state.selectedCity][this.state.chartName]}
           pointsOnScreen={this.state.pointsOnScreen}
           noScroll={this.state.pointsOnScreen >= 12}
+          clickFeedback={true}
+          yAxisLeft={{numberOfTicks: 5}}
+          interactive={true}
           onMarkerClick={this
           .onMarkerClick
           .bind(this)}/>

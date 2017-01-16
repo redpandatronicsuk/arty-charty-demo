@@ -12,7 +12,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 const {Surface, Group, Shape, LinearGradient} = ART;
-import {Tweener, AmimatedCirclesMarker, makeBarsChartPath, makeAreaChartPath, makeLineChartPath, makeSplineChartPath, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues, findRectangleIndexContainingPoint, findClosestPointIndexWithinRadius} from '.';
+import {complement, Tweener, AmimatedCirclesMarker, makeBarsChartPath, makeAreaChartPath, makeLineChartPath, makeSplineChartPath, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues, findRectangleIndexContainingPoint, findClosestPointIndexWithinRadius} from '.';
 import {Spring,Bounce,EasingFunctions} from '../../timing-functions';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
@@ -44,12 +44,13 @@ class ArtyCharty extends Component {
   constructor(props) {
     super(props);
     this.resetState();
+    console.log('complement', complement('rgba(255,0,0)'));
   }
 
   resetState () {
     this.state = {
       trX: 0,
-      t: 0,
+      t: this.props.animated ? 0 : 1,
       gradientStops: {},
       activeMarker: {},
       clickFeedback: {
@@ -63,30 +64,47 @@ class ArtyCharty extends Component {
     this.stopAnimateClickFeedback = false;
   }
 
-  componentWillMount() {
+  init() {
     // Compute constants for all charts, such as maxValues:
-    this.animateChartSpring = new Spring({friction: 150, frequency: 500});
-    this.animateChartSpring2 = new Spring({friction: 150, frequency: 550, anticipationSize: 50});
     this.computeChartConstants();
-    //this.yAxis = this.makeYaxis(5, this.minValue, this.maxValue);
-    this.yAxis = this.makeYaxis(5, 0, this.maxValue);
-    this.initChartGrowAnimations();
-    this.initPanHandler();
-    this.animateClickFeedbackTweener = new Tweener(CLICK_FEDDBACK_ANIMATION_DURATION, t => {
-          this.setState(Object.assign(this.state, 
-              Object.assign(this.state.clickFeedback, {
-                o: 1 - t,
-                r: 300 * t
-              })
-        ));
-    }, EasingFunctions.easeInCubic, false);
-    this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
-          this.setState(Object.assign(this.state, {t}));
-    }, EasingFunctions.linear, false);
+    if (this.props.yAxisLeft) {
+      //this.yAxis = this.makeYaxis(this.props.yAxisLeft.numberOfTicks > 1 ? this.props.yAxisLeft.numberOfTicks-1 : this.props.yAxisLeft.numberOfTicks, this.minValue, this.maxValue);
+      this.yAxis = this.makeYaxis(this.props.yAxisLeft.numberOfTicks > 1 ? this.props.yAxisLeft.numberOfTicks-1 : this.props.yAxisLeft.numberOfTicks, 0, this.maxValue);
+    }
+    if (this.props.animated) {
+      this.initChartGrowAnimations();
+    }
+
+    // Only call if this.props.interactive
+    if (this.props.interactive) {
+      this.initPanHandler();
+    } else {
+      this._panResponder = {};
+    }
+
+    if (this.props.clickFeedback) {
+      this.animateClickFeedbackTweener = new Tweener(CLICK_FEDDBACK_ANIMATION_DURATION, t => {
+            this.setState(Object.assign(this.state, 
+                Object.assign(this.state.clickFeedback, {
+                  o: 1 - t,
+                  r: 300 * t
+                })
+          ));
+      }, EasingFunctions.easeInCubic, false);
+    }
+    
+    // Only call if lowHighCol stuff?????
+    this.makeChartFillColors();
+  }
+
+  componentWillMount() {
+    this.init();
   }
 
   componentDidMount() {
-    this.animateChart();
+    if (this.props.animated) {
+      this.animateChart();
+    }
   }
 
   computeChartConstants() {
@@ -102,6 +120,12 @@ class ArtyCharty extends Component {
   }
 
   initChartGrowAnimations() {
+    this.animateChartSpring = new Spring({friction: 150, frequency: 500});
+    this.animateChartSpring2 = new Spring({friction: 150, frequency: 550, anticipationSize: 50});
+    this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
+          this.setState(Object.assign(this.state, {t}));
+    }, EasingFunctions.linear, false);
+
     let ts = [];
     this.props.data.forEach(d => {
       if (d.timingFunctions) {
@@ -177,7 +201,9 @@ class ArtyCharty extends Component {
             .refs
             .chart
             .measure((fx, fy, width, height, px, py) => {
-              this.animateClickFeedback(tmpX - px, tmpY - py + CHART_HEIGHT / 2);
+              if (this.props.clickFeedback) {
+                this.animateClickFeedback(tmpX - px, tmpY - py + CHART_HEIGHT / 2);
+              }
               this.props.data.some((d, idx) => {
                 if (d.type === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
                   let closestMarker = findClosestPointIndexWithinRadius(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2, MARKER_RADIUS_SQUARED);
@@ -210,14 +236,13 @@ componentWillReceiveProps(nextProps) {
   if (this.props.data !== nextProps.data || this.props.pointsOnScreen !== nextProps.pointsOnScreen) {
     this.props = nextProps;
     this.resetState();
-    this.computeChartConstants();
-    this.yAxis = this.makeYaxis(5, 0, this.maxValue);
-    this.initChartGrowAnimations();
-    this.initPanHandler();
+    this.init();
     // Uncoment if statement to only restart animation
     // if it isn't already playing when switching charts
     // if (!this.animateChartTweener.isPlaying()) {
-      this.animateChart();
+      if (this.props.animated) {
+        this.animateChart();
+      }
     // }
   }
 }
@@ -234,14 +259,30 @@ componentWillReceiveProps(nextProps) {
     }
   }
 
+  makeChartFillColors() {
+    this.props.data.forEach(chart => {
+      if (chart.type === 'bars' || chart.type.slice(-4) === 'area') {
+        chart.data.forEach(d => {
+           d.fillColors = {
+            active: inerpolateColorsFixedAlpha(chart.highCol || chart.lineColor,
+                                                  chart.lowCol || chart.lineColor,
+                                                  d.value/this.maxValue, 1),
+            inactive: inerpolateColorsFixedAlpha(chart.highCol || chart.lineColor,
+                                                  chart.lowCol || chart.lineColor,
+                                                  d.value/this.maxValue, .5)
+          };
+        });
+      }
+    });
+  }
+
   makeGradStops(maxValue, chartIdx) {
     let gradStops = {};
     this.props
       .data[chartIdx].data
       .forEach((d, idx) => {
-        let color = inerpolateColorsFixedAlpha(this.props.data[chartIdx].highCol || this.props.data[chartIdx].lineColor, this.props.data[chartIdx].lowCol || this.props.data[chartIdx].lineColor, d.value/maxValue, this.state.activeMarker.chartIdx === chartIdx && this.state.activeMarker.pointIdx === idx ? 1 : .5);
-        gradStops[(idx / this.props.data[chartIdx].data.length) + (.5 / this.props.data[chartIdx].data.length)] = 
-        color;
+        let color = this.state.activeMarker.chartIdx === chartIdx && this.state.activeMarker.pointIdx === idx ? d.fillColors.active : d.fillColors.inactive;
+        gradStops[(idx / this.props.data[chartIdx].data.length) + (.5 / this.props.data[chartIdx].data.length)] = color;
       });
       return gradStops;
   }
@@ -263,7 +304,7 @@ makeMarkersCoords(chart, width, t) {
     } else {
       xCord = spacing + MARKER_RADIUS;
     }
-    yCord = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler  * chart.timingFunctions[idx % chart.timingFunctions.length](t)
+    yCord = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - d.value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
     markerCords.push({x: xCord, y: yCord});
   });
   return markerCords;
@@ -355,7 +396,6 @@ makeLinearGradientForAreaChart(chart, idx, width) {
             charts.push(this.makeMarkers(markerCords, idx));
             break;
           case 'spline-area':
-            //chartData = this.makeSplineChartPath(chart, width, this.state.t, true);
             chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
             this.props.pointsOnScreen || POINTS_ON_SCREEN, true);
               charts.push(<Shape
@@ -364,7 +404,6 @@ makeLinearGradientForAreaChart(chart, idx, width) {
                   stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={0}
                   fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)} />);
-            //charts.push(this.makeMarkers(markerCords, idx));
             if (chart.hideLine) {
               // Make marker coords:
               markerCords = this.makeMarkersCoords(chart, width, this.state.t);
@@ -374,7 +413,6 @@ makeLinearGradientForAreaChart(chart, idx, width) {
               break;
             }
           case 'spline':
-            // chartData = this.makeSplineChartPath(chart, width, this.state.t, false);
             chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS,
             this.props.pointsOnScreen || POINTS_ON_SCREEN, false);
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
@@ -413,19 +451,14 @@ makeLinearGradientForAreaChart(chart, idx, width) {
         }]}
         ref="chart" >
           <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
-          style={{
-            backgroundColor: 'rgba(0,0,0,0)', overflow: 'visible', marginTop: -CHART_HEIGHT/2}}>
+          style={styles.chartSurface}>
           {charts}
           <Shape d={makeCircle(this.state.clickFeedback.x, this.state.clickFeedback.y, this.state.clickFeedback.r)} fill={`rgba(255,255,255, ${this.state.clickFeedback.o})`} />
         </Surface>
         </View>
-        <View {...this._panResponder.panHandlers} style={{
-          position: 'absolute',
-          top: 10,
-          left: 0
-        }}>
+        <View {...this._panResponder.panHandlers} style={styles.axesContainer}>
           <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
-          style={{backgroundColor: 'rgba(0,0,0,0)', overflow: 'visible', marginTop: -CHART_HEIGHT/2}}>
+          style={styles.chartSurface}>
            {this.yAxis}
         </Surface>
         </View>
@@ -439,6 +472,16 @@ const styles = StyleSheet.create({
           overflow: 'visible',
           marginTop: 10,
           marginBottom: 10
+  },
+  chartSurface: {
+    backgroundColor: 'rgba(0,0,0,0)',
+    overflow: 'visible',
+    marginTop: -CHART_HEIGHT/2
+  },
+  axesContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 0
   }
 });
 
