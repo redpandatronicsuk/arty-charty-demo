@@ -1,5 +1,10 @@
- ffmpeg -y -i demo-video_1.mp4 \
--vf fps=5,scale=320:-1:flags=lanczos,palettegen palette.png
+#/bin/bash
 
-ffmpeg -i demo-video_1.mp4 -i palette.png -filter_complex \
-"fps=5,scale=320:-1:flags=lanczos[x];[x][1:v]paletteuse" output-5fps.gif
+FPS="${2:-5}"
+SCALE="${3:-320}"
+
+ffmpeg -y -i $1 \
+-vf fps=$FPS,scale=$SCALE:-1:flags=lanczos,palettegen palette.png
+
+ffmpeg -i $1 -i palette.png -filter_complex \
+"fps=$FPS,scale=$SCALE:-1:flags=lanczos[x];[x][1:v]paletteuse" $1-$FPS-$SCALE.gif
