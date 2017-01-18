@@ -58,3 +58,9 @@ fastlane/screenshots
 android/
 ios/
 .vscode/s
+
+*.mov
+
+stuff/palette.png
+
+stuff/palette.png

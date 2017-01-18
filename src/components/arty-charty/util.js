@@ -254,6 +254,25 @@ function computeSplineControlPoints(K)
 	return {p1:p1, p2:p2};
 }
 
+/**
+   * Generate the SVG path for a bar chart.
+   * 
+   * @param  {object}  chart             The chart object
+   * @param  {number}  width             Width of the chart in pixels
+   * @param  {number}  t                 Scale parameter (range: 0-1), used for 
+   *                                     animating the graph
+   * @param  {number}  maxValue          The maximum value of chart data
+   * @param  {number}  chartHeight       Height of the chart in pixels
+   * @param  {number}  chartHeightOffset By how much to offset the chart height.
+   *                                     Note: The negation of this number is as
+   *                                           the marginTop for the component.
+   *                                           This is done so when the graph is
+   *                                           animated, overflow is not cut off.
+   * @param  {number}  markerRadius      Radius of the markers on the line (only needed to calcualte the height scaler and keep it consistent with the line/area chart, refactor for better name!!!)
+   * @param  {number}  pointsOnScreen    The number of points to show on the screen
+   *                                     without having to scroll. Used to calculate
+   *                                     the horizontal spacing between points. (maybe find better name????)
+   */
 function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft) {
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
@@ -292,6 +311,10 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
     };
   }
 
+  /**
+   * Common function used by line/spline/area charts to compute
+   * the next X coordinate when generating the chart SVG path.
+   */
   function makeXcord(chart, fullWidth, t, spacing, markerRadius) {
     if (chart.drawChart) {
           return Math.min(fullWidth * t, spacing + markerRadius);
@@ -302,23 +325,51 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
         }
   }
 
+  /**
+   * Wrapper function for makeLineOrAreaChartPath to make a line chart.
+   */
   function makeAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
     return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, true);
   }
 
+  /**
+   * Wrapper function for makeLineOrAreaChartPath to make an area chart.
+   */
   function makeLineChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
     return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, false);
   }
 
+  /**
+   * Generate the SVG path for a line or area chart.
+   * 
+   * @param  {object}  chart             The chart object
+   * @param  {number}  width             Width of the chart in pixels
+   * @param  {number}  t                 Scale parameter (range: 0-1), used for 
+   *                                     animating the graph
+   * @param  {number}  maxValue          The maximum value of chart data
+   * @param  {number}  chartHeight       Height of the chart in pixels
+   * @param  {number}  chartHeightOffset By how much to offset the chart height.
+   *                                     Note: The negation of this number is as
+   *                                           the marginTop for the component.
+   *                                           This is done so when the graph is
+   *                                           animated, overflow is not cut off.
+   * @param  {number}  markerRadius      Radius of the markers on the line (needed here so we can add it to the width of the chart element, maybe change name to something better such as padding!!!!)
+   * @param  {number}  pointsOnScreen    The number of points to show on the screen
+   *                                     without having to scroll. Used to calculate
+   *                                     the horizontal spacing between points. (maybe find better name????)
+   * @param  {boolean} makeArea          Wether to close the line (make it an
+   *                                     area chart) or not.
+   */
    function makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, makeArea) {
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
-    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+    let centeriser = xSpacing / 2 - markerRadius;
+    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius + centeriser;
 
     let lineStrArray = makeArea ? ['M' + markerRadius, chartHeight+chartHeightOffset] : [];
     let xCord;
     chart.data.some((d, idx) => {
-    let spacing = idx*xSpacing;
+    let spacing = idx*xSpacing + centeriser;
         if (spacing > fullWidth * t && chart.drawChart) {
           return true;
         }
@@ -341,16 +392,38 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
     };
   }
 
+  /**
+   * Generate the SVG path for a spline or spline-area chart.
+   * 
+   * @param  {object}  chart             The chart object
+   * @param  {number}  width             Width of the chart in pixels
+   * @param  {number}  t                 Scale parameter (range: 0-1), used for 
+   *                                     animating the graph
+   * @param  {number}  maxValue          The maximum value of chart data
+   * @param  {number}  chartHeight       Height of the chart in pixels
+   * @param  {number}  chartHeightOffset By how much to offset the chart height.
+   *                                     Note: The negation of this number is as
+   *                                           the marginTop for the component.
+   *                                           This is done so when the graph is
+   *                                           animated, overflow is not cut off.
+   * @param  {number}  markerRadius      Radius of the markers on the line (needed here so we can add it to the width of the chart element, maybe change name to something better such as padding!!!!)
+   * @param  {number}  pointsOnScreen    The number of points to show on the screen
+   *                                     without having to scroll. Used to calculate
+   *                                     the horizontal spacing between points. (maybe find better name????)
+   * @param  {boolean} closePath         Wether to close the spline (make it an
+   *                                     area chart) or not.
+   */
   function makeSplineChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, closePath) {
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
-    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+    let centeriser = xSpacing / 2 - markerRadius;
+    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius + centeriser;
 
     let xCord;
     let xCords = [];
     let yCords = [];
     chart.data.forEach((d, idx) => {
-        let spacing = idx*xSpacing;
+        let spacing = idx*xSpacing + centeriser;
         if (spacing > fullWidth * t && chart.drawChart) {
           return true;
         }
@@ -378,8 +451,17 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
  * =====================================================
  * ================ COLOUR FUNCTIONS ===================
  * =====================================================
+ * Note for more look here: http://www.easyrgb.com/index.php?X=MATH
  */
 
+/**
+ * Compute the RGB component value for the provided
+ * HSL parameters.
+ * 
+ * @param  {number}  p  lumanence and saturation parameter 1
+ * @param  {number}  q  lumanence and saturation parameter 2
+ * @param  {number}  t  The hue value
+ */
 function hue2rgb(p, q, t){
       if(t < 0) t += 1;
       if(t > 1) t -= 1;
@@ -454,11 +536,18 @@ function rgbToHsl(r, g, b){
     return [h, s, l];
 }
 
+/**
+ * Converts a RGBA colour to HSLA.
+ */
 function rgbaToHsla(h, s, l, a) {
   return [...rgbToHsl(h,s,l), a];
 }
 
-
+/**
+ * Parse a colour CSS colour string and return a RGBA object.
+ * NOTE: There is already a similar function built into React
+ * Native -> check if that can be used instead!
+ */
 function parseColor(col) {
   let tmp;
   if (typeof col === 'string') {
@@ -557,6 +646,9 @@ function RGBobj2string(obj) {
   return `rgba(${obj.r},${obj.g},${obj.b},${obj.a})`;
 }
 
+/**
+ * Interpolate two colours (including alpha value).
+ */
 function inerpolateColors(col1, col2, amount) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
@@ -568,6 +660,9 @@ function inerpolateColors(col1, col2, amount) {
   });
 }
 
+/**
+ * Interpolate two colours and set the alpha value.
+ */
 function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
@@ -579,6 +674,9 @@ function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
   });
 }
 
+/**
+ * Shade the colour by the given amount.
+ */
 function shadeColor(col, amount) {
   let col1rgb = parseColor(col);
   return RGBobj2string({
@@ -589,6 +687,9 @@ function shadeColor(col, amount) {
   });
 }
 
+/**
+ * Tint the colour by the given amount.
+ */
 function tintColor(col, amount) {
   let col1rgb = parseColor(col);
   return RGBobj2string({
@@ -599,6 +700,9 @@ function tintColor(col, amount) {
   });
 }
 
+/**
+ * Increase colour lightness by the given amount.
+ */
 function lightenColor(col, amount) {
   let colRgba = parseColor(col);
   let colHsla = rgbaToHsla(colRgba.r, colRgba.g, colRgba.b, colRgba.a);
@@ -611,6 +715,9 @@ function lightenColor(col, amount) {
   });
 }
 
+/**
+ * Increase colour saturation by the given amount.
+ */
 function saturateColor(col, amount) {
   let colRgba = parseColor(col);
   let colHsla = rgbaToHsla(colRgba.r, colRgba.g, colRgba.b, colRgba.a);
@@ -623,10 +730,13 @@ function saturateColor(col, amount) {
   });
 }
 
+/**
+ * Hue shift colour by a given amount.
+ */
 function hueshiftColor(col, amount) {
   let colRgba = parseColor(col);
   let colHsla = rgbaToHsla(colRgba.r, colRgba.g, colRgba.b, colRgba.a);
-  colRgba = hslaToRgba(Math.min(Math.max(colHsla[0]+amount, 0), 1), colHsla[1], colHsla[2],colHsla[3]);
+  colRgba = hslaToRgba((hsl[0] + amount) % 1, colHsla[1], colHsla[2],colHsla[3]);
   return RGBobj2string({
     r: colRgba[0],
     g: colRgba[1],
@@ -635,6 +745,13 @@ function hueshiftColor(col, amount) {
   });
 }
 
+/**
+ * Compute the complement of a given colour.
+ * It converts the input colour to HSL and then
+ * shifts the hue by 180°. Doesn't give the same
+ * complement colour as using the colour wheel,
+ * but still a good enough complement colour.
+ */
 function complement(color) {
   let rgb = parseColor(color);
   let hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
@@ -642,6 +759,9 @@ function complement(color) {
   return hslToRgb(...hsl);
 }
 
+/**
+ * Find minimum and maximum value in an array of numbers
+ */
 function getMinMaxValues(arr) {
     let maxValue = Number.MIN_VALUE;
     let minValue = Number.MAX_VALUE;
@@ -726,6 +846,3 @@ export {
   makeLineChartPath,
   makeSplineChartPath
  }
-
-// TO-DO:
-// complement color

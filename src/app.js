@@ -183,6 +183,7 @@ function formatDonutData(arr, data) {
         color: data[idx2].color,
       });
     });
+    console.log('donut data', out);
     return out;
   });
 }
@@ -275,7 +276,7 @@ class App extends Component {
             })
         },
         {
-            type: 'line',
+            type: 'spline',
             label: 'Average rainfall days',
             lineColor: 'rgba(0,0,128,.75)',
             drawChart: true,
@@ -617,6 +618,7 @@ class App extends Component {
           clickFeedback={true}
           yAxisLeft={{numberOfTicks: 5}}
           interactive={true}
+          animated={true}
           onMarkerClick={this
           .onMarkerClick
           .bind(this)}/>
