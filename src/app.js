@@ -13,7 +13,7 @@ import {
   StatusBar,
   ART
 } from 'react-native';
-import {ArtyCharty, AmimatedCirclesMarker, ArtyChartyDonut, ArtyChartyPie, ArtySparkyLine, ArtySparkyPie} from './components';
+import {ArtyCharty, ArtyChartyXY, AmimatedCirclesMarker, ArtyChartyDonut, ArtyChartyPie, ArtySparkyLine, ArtySparkyPie} from './components';
 const {Surface} = ART;
 const monthNames = [
   "January",
@@ -714,12 +714,7 @@ class App extends Component {
            }));
          }}/>
          <Text>{this.state.pieChartText}</Text>
-         <View style={{
-              width: Dimensions.get('window').width,
-              height: 1,
-              backgroundColor: 'grey',
-              margin: 3
-            }}/>
+         {hr}
         <Text>{this.data[this.state.selectedCity].sunnyVsCloudyDaylightPercentageMonthly.label}</Text>
         <ArtyChartyDonut
           data={
@@ -741,6 +736,12 @@ class App extends Component {
             },
             textShadowColor: this.state.donutChartTextShadowColor
           }}>{this.state.donutChartText}</Text>
+          {hr}
+          <Text>Scatter</Text>
+          <ArtyChartyXY showGrid={true} type="scatter" pointRadius={3} data={Array.from(Array(20)).map(()=> { return {x: Math.random()*20, y: Math.random()* 10} })}/>
+          {hr}
+          <Text>Bubble</Text>
+          <ArtyChartyXY type="bubble" animated={true} pointRadius={3} data={Array.from(Array(20)).map(()=> { return {x: Math.random()*20, y: Math.random()* 10, value: Math.random()* 20, color: `rgba(${Math.round(Math.random() * 255)},${Math.round(Math.random() * 255)},${Math.round(Math.random() * 255)}, .5)` }})}/>
           </View>
          </ScrollView>
         </Modal>
@@ -813,6 +814,13 @@ class App extends Component {
     );
   }
 }
+
+const hr = <View style={{
+    width: Dimensions.get('window').width,
+    height: 1,
+    backgroundColor: 'grey',
+    margin: 3
+  }}/>;
 
 const txtShadow = {
   color: 'white',
