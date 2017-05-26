@@ -273,23 +273,24 @@ function computeSplineControlPoints(K)
    *                                     without having to scroll. Used to calculate
    *                                     the horizontal spacing between points. (maybe find better name????)
    */
-function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft) {
+function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft, isRange) {
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
     let barWidth = xSpacing - paddingLeft;
     let fullWidth = paddingLeft/2 + (paddingLeft+barWidth) * (chart.data.length-1) + barWidth;
     let pathStr = []
     let barCords = [];
+    let x1, y1, y2;
     chart.data.some((d, idx) => {
-        let x1 = paddingLeft/2 + (paddingLeft+barWidth) * idx;
+        x1 = paddingLeft/2 + (paddingLeft+barWidth) * idx;
         if (x1 > fullWidth * t && chart.drawChart) {
           return true;
         }
         if (chart.stretchChart) {
           x1 = x1 * t;
         }
-    let y1 = (chartHeight+chartHeightOffset) - d.value * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
-        let y2 = (chartHeight+chartHeightOffset);
+        y1 = (chartHeight+chartHeightOffset) - d.value * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
+        y2 = isRange ? (chartHeight+chartHeightOffset) - d.valueLow * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1) : (chartHeight+chartHeightOffset);
         pathStr.push('M');
         pathStr.push(x1);
         pathStr.push(y2);
@@ -311,6 +312,153 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
     };
   }
 
+  // Make like candle-stick, where each stck is its own Shape
+  function makeStackedBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft, yAxisWidth, isRange) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    width = width - yAxisWidth;
+    let xSpacing = width / pointsOnScreen;
+    let barWidth = xSpacing - paddingLeft;
+    let fullWidth = paddingLeft/2 + (paddingLeft+barWidth) * (chart.data.length-1) + barWidth;
+    let paths = []
+    let barCords = [];
+    let x1, y1, y2;
+    chart.data.some((d, idx) => {
+        x1 = paddingLeft/2 + (paddingLeft+barWidth) * idx + yAxisWidth;
+        if (x1 > fullWidth * t && chart.drawChart) {
+          return true;
+        }
+        if (chart.stretchChart) {
+          x1 = x1 * t;
+        }
+        let prevY = 0;
+        d.forEach((stack) => {
+          y1 = (chartHeight+chartHeightOffset) - (stack.value+prevY) * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
+          //y2 = isRange ? (chartHeight+chartHeightOffset) - prevY * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1) : (chartHeight+chartHeightOffset);
+          y2 = isRange ? (chartHeight+chartHeightOffset) - prevY * heightScaler * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1) : (chartHeight+chartHeightOffset);
+          prevY += stack.value;
+          paths.push({path: makeBarPath(x1, y1, y2, barWidth), color: stack.color});
+          barCords.push({x1: x1, x2: x1+barWidth, y1: y1, y2: y2});
+          });
+    });
+    return {
+      //path: pathStr.join(' '),
+      path: paths,
+      width: fullWidth,
+      maxScroll: fullWidth - width,
+      barCords: barCords
+    };
+  }
+
+  function makeBarPath(x1, y1, y2, width) {
+    return `M${x1} ${y2} H${x1 + width} V${y1} H${x1} V${y2}`;
+  }
+
+  function makeBars3DChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft, yAxisWidth) {
+    let barWidth = width / (chart.data.length) / chart.data[0].length;
+    let heightScaler = (chartHeight - barWidth/2*(chart.data[0].length))/maxValue;
+    width = width - yAxisWidth;
+    let fullWidth = width;
+    let paths = []
+    let barCords = [];
+    let x1, y1, y2;
+
+    const leftMargin = 10;
+    const columnWidth = barWidth * .75 * chart.data[0].length + barWidth;
+    const barGap = barWidth * .75 * chart.data[0].length;
+    let bottomOfsetRow = chartHeight + chartHeightOffset;
+    const rowGap = barWidth;
+
+    let verticalGap = barWidth/2;
+    let pointIdx = 0;
+    let doBreak = false;
+    chart.data.some((col, colIdx) => {
+      col.some((row, rowIdx) => {
+        let y1 = row.value*heightScaler * (chart.timingFunctions ? chart.timingFunctions[colIdx % chart.timingFunctions.length](t) : 1);
+        let y2 = bottomOfsetRow - verticalGap * rowIdx;
+        let rowSideShift = barWidth * .75 * rowIdx;
+        let x1 = leftMargin + columnWidth * colIdx + rowSideShift;
+        if (x1 > fullWidth * t && chart.drawChart) {
+          doBreak = true;
+          return true;
+        }
+        let bar3d = make3dBar(
+           x1,
+           y2,
+           barWidth,
+           y1,
+        );
+        bar3d.mainColor = row.color;
+        bar3d.sideColor = lightenColor(row.color, .2);
+        bar3d.topColor = lightenColor(row.color, .4);
+        bar3d.pointIdx = pointIdx++;
+        paths.unshift(bar3d);
+        barCords.push({x1: x1, x2: x1+barWidth+barWidth/2, y1: y2 - y1-barWidth/2, y2: y2});
+      });
+      if (doBreak) {
+          return true;
+        }
+    });
+    return {
+      path: paths,
+      width: fullWidth,
+      maxScroll: width,
+      barCords: barCords
+    };
+  }
+
+  function make3dBar(x, y, width, height) {
+    let hw = width/2;
+    return {
+      main: `M${x} ${y} H${x+width} V${y-height} H${x} Z`,
+      side: `M${x+width} ${y} L${x+width+hw} ${y-hw} V${y-height-hw} L${x+width} ${y-height} V${y} Z`,
+      top: `M${x+hw} ${y-hw-height} H${x+width+hw} L${x+width} ${y-height} H${x} Z`
+    };
+  }
+
+  function makeCandlestickChart(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, paddingLeft) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    let xSpacing = width / pointsOnScreen;
+    let barWidth = xSpacing - paddingLeft;
+    let fullWidth = paddingLeft/2 + (paddingLeft+barWidth) * (chart.data.length-1) + barWidth;
+    let paths = [];
+    let barCords = [];
+    chart.data.some((d, idx) => {
+        let candle = makeCandlestickPath(d, idx, chart, t, heightScaler, barWidth, fullWidth, chartHeight, chartHeightOffset, paddingLeft);
+        paths.push(candle);
+        barCords.push(candle.barCords);
+    });
+    return {
+      paths: paths,
+      width: fullWidth,
+      maxScroll: fullWidth - width,
+      barCords: barCords
+    };
+  }
+
+  function makeCandlestickPath(d, idx, chart, t, heightScaler, barWidth, fullWidth, chartHeight, chartHeightOffset, paddingLeft) {
+        let x1 = paddingLeft/2 + (paddingLeft+barWidth) * idx;
+        let openHigherThanClose = d.open > d.close;
+        let pathStr = [];
+        let top = openHigherThanClose ? d.open : d.close;
+        let bottom = openHigherThanClose ? d.close : d.open;
+        let tScaled = chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1;
+        if (x1 > fullWidth * t && chart.drawChart) {
+          return true;
+        }
+        if (chart.stretchChart) {
+          x1 = x1 * t;
+        }
+        let y1 = (chartHeight+chartHeightOffset) - top * heightScaler * tScaled;
+        let y2 = (chartHeight+chartHeightOffset) - bottom * heightScaler * tScaled;
+        let yLow = (chartHeight+chartHeightOffset) - d.low * heightScaler * tScaled;
+        let yTop = (chartHeight+chartHeightOffset) - d.high * heightScaler * tScaled;
+        pathStr.push(`M${x1} ${y2} H${x1+barWidth} V${y1} H${x1} V${y2} M${x1 + barWidth / 2} ${yLow} V${y2} M${x1 + barWidth / 2} ${yTop} V${y1}`);
+    return {
+      //openHigherThanClose, pathStr, barCords: {x1: x1, x2: x1+barWidth, y1: y1, y2: y2}
+      openHigherThanClose, pathStr: pathStr.join(' '), barCords: {x1: x1, x2: x1+barWidth, y1: yTop, y2: yLow}
+    };
+  }
+
   /**
    * Common function used by line/spline/area charts to compute
    * the next X coordinate when generating the chart SVG path.
@@ -329,14 +477,18 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
    * Wrapper function for makeLineOrAreaChartPath to make a line chart.
    */
   function makeAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
-    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, true);
+    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, true, false);
+  }
+
+  function makeAreaRangeChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
+    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, true, true);
   }
 
   /**
    * Wrapper function for makeLineOrAreaChartPath to make an area chart.
    */
   function makeLineChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
-    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, false);
+    return makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, false, false);
   }
 
   /**
@@ -360,14 +512,20 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
    * @param  {boolean} makeArea          Wether to close the line (make it an
    *                                     area chart) or not.
    */
-   function makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, makeArea) {
+  function makeLineOrAreaChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen, makeArea, isRange) {
     let heightScaler = (chartHeight-markerRadius)/maxValue;
     let xSpacing = width / pointsOnScreen;
     let centeriser = xSpacing / 2 - markerRadius;
     let fullWidth = xSpacing*(chart.data.length-1) + markerRadius + centeriser;
 
-    let lineStrArray = makeArea ? ['M' + markerRadius, chartHeight+chartHeightOffset] : [];
+    let lineStrArray = makeArea && !isRange ? ['M' + markerRadius, chartHeight+chartHeightOffset] : [];
+    if (isRange) {
+      lineStrArray.push('M');
+      lineStrArray.push(makeXcord(chart, fullWidth, t, centeriser, markerRadius));
+      lineStrArray.push((chartHeight+chartHeightOffset) - chart.data[0].value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[0 % chart.timingFunctions.length](t) : 1)); 
+    }
     let xCord;
+    let lowCords = [];
     chart.data.some((d, idx) => {
     let spacing = idx*xSpacing + centeriser;
         if (spacing > fullWidth * t && chart.drawChart) {
@@ -379,12 +537,51 @@ function makeBarsChartPath(chart, width, t, maxValue, chartHeight, chartHeightOf
         // And y-cordinate:
         let yCord = (chartHeight+chartHeightOffset) - d.value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
         lineStrArray.push(yCord);
+        if (isRange) {
+          let yCordLow = (chartHeight+chartHeightOffset) - d.valueLow * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
+          lowCords.unshift({xCord, yCordLow});
+        }
     });
     if (makeArea) {
-      lineStrArray.push('L' + xCord);
-      lineStrArray.push(chartHeight+chartHeightOffset);
+      if (isRange) {
+        lowCords.forEach((d) => {
+          lineStrArray.push('L' + d.xCord);
+          lineStrArray.push(d.yCordLow);
+        });
+        // lineStrArray.push('L' + makeXcord(chart, fullWidth, t, xSpacing + centeriser, markerRadius));
+        // lineStrArray.push(d.yCordLow);
+      } else {
+        lineStrArray.push('L' + xCord);
+        lineStrArray.push(chartHeight + chartHeightOffset);
+      }
       lineStrArray.push('Z');
     }
+    return {
+      path: lineStrArray.join(' '),
+      width: xCord + markerRadius,
+      maxScroll: fullWidth - xSpacing + markerRadius
+    };
+  }
+
+  function makeLineStepChartPath(chart, width, t, maxValue, chartHeight, chartHeightOffset, markerRadius, pointsOnScreen) {
+    let heightScaler = (chartHeight-markerRadius)/maxValue;
+    let xSpacing = width / pointsOnScreen;
+    let fullWidth = xSpacing*(chart.data.length-1) + markerRadius;
+    let lineStrArray = [
+          'M0',
+          (chartHeight+chartHeightOffset) - chart.data[0].value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[0 % chart.timingFunctions.length](t) : 1)
+      ];
+    let idx, xCord, yCord;
+    for (idx = 0; idx < chart.data.length-1; idx++) {
+      xCord = (idx+1)*xSpacing;
+      if (xCord > fullWidth * t && chart.drawChart) {
+        break;
+      }
+      lineStrArray.push('H' + xCord);
+      yCord = (chartHeight+chartHeightOffset) - chart.data[idx+1].value * heightScaler  * (chart.timingFunctions ? chart.timingFunctions[idx % chart.timingFunctions.length](t) : 1);
+      lineStrArray.push('V' + yCord);
+    }
+    lineStrArray.push('H' + chart.data.length*xSpacing);
     return {
       path: lineStrArray.join(' '),
       width: xCord + markerRadius,
@@ -653,9 +850,9 @@ function inerpolateColors(col1, col2, amount) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
   return RGBobj2string({
-    r: Math.min(255, col1rgb.r * amount + col2rgb.r * (1-amount)),
-    g: Math.min(255, col1rgb.g * amount + col2rgb.g * (1-amount)),
-    b: Math.min(255, col1rgb.b * amount + col2rgb.b * (1-amount)),
+    r: Math.round(Math.min(255, col1rgb.r * amount + col2rgb.r * (1-amount))),
+    g: Math.round(Math.min(255, col1rgb.g * amount + col2rgb.g * (1-amount))),
+    b: Math.round(Math.min(255, col1rgb.b * amount + col2rgb.b * (1-amount))),
     a: Math.min(1, col1rgb.a * amount + col2rgb.a * (1-amount))
   });
 }
@@ -667,9 +864,9 @@ function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
   return RGBobj2string({
-    r: Math.min(255, col1rgb.r * amount + col2rgb.r * Math.max(0,1-amount)),
-    g: Math.min(255, col1rgb.g * amount + col2rgb.g * Math.max(0,1-amount)),
-    b: Math.min(255, col1rgb.b * amount + col2rgb.b * Math.max(0,1-amount)),
+    r: Math.round(Math.min(255, col1rgb.r * amount + col2rgb.r * Math.max(0,1-amount))),
+    g: Math.round(Math.min(255, col1rgb.g * amount + col2rgb.g * Math.max(0,1-amount))),
+    b: Math.round(Math.min(255, col1rgb.b * amount + col2rgb.b * Math.max(0,1-amount))),
     a: alpha
   });
 }
@@ -680,9 +877,9 @@ function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
 function shadeColor(col, amount) {
   let col1rgb = parseColor(col);
   return RGBobj2string({
-    r: Math.min(255, col1rgb.r * amount + 0 * Math.max(0,1-amount)),
-    g: Math.min(255, col1rgb.g * amount + 0 * Math.max(0,1-amount)),
-    b: Math.min(255, col1rgb.b * amount + 0 * Math.max(0,1-amount)),
+    r: Math.round(Math.min(255, col1rgb.r * amount + 0 * Math.max(0,1-amount))),
+    g: Math.round(Math.min(255, col1rgb.g * amount + 0 * Math.max(0,1-amount))),
+    b: Math.round(Math.min(255, col1rgb.b * amount + 0 * Math.max(0,1-amount))),
     a: col1rgb.a
   });
 }
@@ -756,6 +953,7 @@ function complement(color) {
   let rgb = parseColor(color);
   let hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
   hsl[0] = (hsl[0] + .5) % 1;
+  hsl[2] = 1 - hsl[2];
   return hslToRgb(...hsl);
 }
 
@@ -775,6 +973,51 @@ function getMinMaxValues(arr) {
         }
       });
       return {maxValue, minValue};
+  }
+
+  /**
+ * Find minimum and maximum value in an array of numbers
+ */
+function getMinMaxValuesRange(arr) {
+    let maxValue = Number.MIN_VALUE;
+    let minValue = Number.MAX_VALUE;
+    arr
+      .forEach((d) => {
+        if (d.value > maxValue) {
+          maxValue = d.value;
+        }
+        if (d.valueLow < minValue) {
+          minValue = d.valueLow;
+        }
+      });
+      return {maxValue, minValue};
+  }
+
+/**
+ * Find maximum stacksum
+ */
+function getMaxSumStack(arr) { //here!!!
+    let maxValue = Number.MIN_VALUE;
+    arr
+      .forEach((d) => {
+        let stackSum = computeArrayValueSum(d);
+        if (stackSum > maxValue) {
+          maxValue = stackSum;
+        }
+      });
+      return maxValue;
+  }
+
+  function getMaxSumBars3d(arr) {
+    let maxValue = Number.MIN_VALUE;
+    arr.forEach(column => {
+      column.forEach(bar => {
+        if (bar.value > maxValue) {
+          maxValue = bar.value;
+        }
+      });
+    });
+    return maxValue;
   }
 
   /**
@@ -804,8 +1047,33 @@ function getMinMaxValuesXY(arr) {
       return {maxValueX, minValueX, maxValueY, minValueY};
   }
 
+  /**
+ * Find minimum and maximum value in an array of candlestick objects
+ */
+function getMinMaxValuesCandlestick(arr) {
+    let maxValue = Number.MIN_VALUE;
+    let minValue = Number.MAX_VALUE;
+    arr
+      .forEach((d) => {
+        if (d.high > maxValue) {
+          maxValue = d.high;
+        }
+        if (d.low < minValue) {
+          minValue = d.low;
+        }
+      });
+      return {maxValue, minValue};
+  }
+
   function  computeChartSum(chart) {
-    return chart.data.reduce((a,b) => { 
+    return computeArrayValueSum(chart.data);
+    // return chart.data.reduce((a,b) => { 
+    //   return a + b.value;
+    // },0);
+  }
+
+  function  computeArrayValueSum(arr) {
+    return arr.reduce((a,b) => { 
       return a + b.value;
     },0);
   }
@@ -852,6 +1120,7 @@ function getMinMaxValuesXY(arr) {
   }
 
 export { 
+  polarToCartesian,
   makeArc,
   inerpolateColors,
   inerpolateColorsFixedAlpha,
@@ -866,11 +1135,20 @@ export {
   makeSpline,
   getMinMaxValues,
   getMinMaxValuesXY,
+  getMinMaxValuesCandlestick,
+  getMinMaxValuesRange,
   computeChartSum,
   findRectangleIndexContainingPoint,
   findClosestPointIndexWithinRadius,
   makeBarsChartPath,
   makeAreaChartPath,
   makeLineChartPath,
-  makeSplineChartPath
+  makeSplineChartPath,
+  makeCandlestickChart,
+  makeAreaRangeChartPath,
+  makeLineStepChartPath,
+  makeStackedBarsChartPath,
+  makeBars3DChartPath,
+  getMaxSumStack,
+  getMaxSumBars3d
  }
