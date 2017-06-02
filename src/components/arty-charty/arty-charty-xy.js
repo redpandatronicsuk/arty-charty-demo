@@ -1,18 +1,18 @@
 import React, {Component} from 'react';
 import {
-  Alert,
-  Animated,
   Dimensions,
-  Image,
   Responder,
-  Text,
-  View,
-  ART,
-  TouchableOpacity,
-  Easing
+  View
 } from 'react-native';
-const {Surface, Group, Shape, LinearGradient} = ART;
-import {Spring,EasingFunctions} from '../../timing-functions';
+import Svg,{
+    Defs,
+    G,
+    LinearGradient,
+    Path,
+    Stop,
+    Text
+} from 'react-native-svg';
+import {Spring,EasingFunctions} from '../timing-functions';
 import {makeArc, Tweener, getMinMaxValuesXY, makeCircle} from '.';
 
 const CHART_GROW_ANIMATION_DURATION = 3000;
@@ -27,7 +27,7 @@ class ArtyChartyXY extends Component {
       t: this.props.animated === true ? 0 : 1,
       clickedPointIdx: -1
     };
-    this.spring = new Spring({friction: 5, frequency: 200});
+    this.spring = new Spring({friction: 25, frequency: 200});
   }
 
   componentWillMount() {
@@ -36,7 +36,7 @@ class ArtyChartyXY extends Component {
    this._makeYaxis();
    if (this.props.animated) {
      this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
-        this.setState(Object.assign(this.state, {t}));
+        this.setState({t});
     }, this.spring.interpolate.bind(this.spring), false);
    }
    this._initPanHandler();
@@ -71,17 +71,17 @@ class ArtyChartyXY extends Component {
     let ticks = Array.from(Array(numXticks)).map((d, idx) => {
       let x = (this.minMaxs.minValueX + (stepSize * idx));
       return (
-        <Group key={idx}>
-        <Shape stroke="black" strokeWidth={1} d={`M ${x * this.widthScaler + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} V ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING + 3}`} />
-        {this.props.showGrid ? <Shape stroke="gray" strokeDash={[0, 0, 4, 6]}strokeDash={[0, 0, 4, 6]} strokeWidth={1} d={`M ${x * this.widthScaler + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} V 0`} /> : null}
-        <ART.Text alignment="center" fill="black" x={x * this.widthScaler + Y_AXIS_WIDTH} y={this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} font="16px Arial">{x.toFixed(2)}</ART.Text>
-        </Group>
+        <G key={idx}>
+        <Path stroke="black" strokeWidth={1} d={`M ${x * this.widthScaler + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} V ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING + 3}`} />
+        {this.props.showGrid ? <Path stroke="gray" strokeDash={[0, 0, 4, 6]}strokeDash={[0, 0, 4, 6]} strokeWidth={1} d={`M ${x * this.widthScaler + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} V 0`} /> : null}
+        <Text alignment="center" fill="black" x={x * this.widthScaler + Y_AXIS_WIDTH} y={this.minMaxs.maxValueY * this.heightScaler+ CHART_PADDING} fontSize="16" fontFamily="Arial">{x.toFixed(2)}</Text>
+        </G>
         );
     });
-    this.xAxis = (<Group>
-      <Shape stroke="black" strokeWidth={1} d={`M ${CHART_PADDING + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler + CHART_PADDING} H ${this.minMaxs.maxValueX * this.widthScaler + Y_AXIS_WIDTH}`} />
+    this.xAxis = (<G>
+      <Path stroke="black" strokeWidth={1} d={`M ${CHART_PADDING + Y_AXIS_WIDTH} ${this.minMaxs.maxValueY * this.heightScaler + CHART_PADDING} H ${this.minMaxs.maxValueX * this.widthScaler + Y_AXIS_WIDTH}`} />
       {ticks}
-    </Group>);
+    </G>);
   }
 
  _makeYaxis() {
@@ -90,17 +90,17 @@ class ArtyChartyXY extends Component {
     let ticks = Array.from(Array(numYticks+1)).map((d, idx) => {
     let y = (this.minMaxs.minValueY + (stepSize * idx));
       return (
-        <Group key={idx}>
-        <Shape stroke="black" strokeWidth={1} d={`M ${Y_AXIS_WIDTH} ${y* this.heightScaler} H ${Y_AXIS_WIDTH-5}`} />
-        {this.props.showGrid ? <Shape stroke="gray" strokeWidth={1} strokeDash={[0, 0, 4, 6]} d={`M ${Y_AXIS_WIDTH} ${y* this.heightScaler} H ${Y_AXIS_WIDTH + this.chartWidth * this.widthScaler}`} /> : null}
-      <ART.Text alignment="right" fill="black" x={Y_AXIS_WIDTH-5} y={y * this.heightScaler - 10} font="16px Arial">{(this.minMaxs.maxValueY-y).toFixed(2)}</ART.Text>
-        </Group>
+        <G key={idx}>
+        <Path stroke="black" strokeWidth={1} d={`M ${Y_AXIS_WIDTH} ${y* this.heightScaler} H ${Y_AXIS_WIDTH-5}`} />
+        {this.props.showGrid ? <Path stroke="gray" strokeWidth={1} strokeDash={[0, 0, 4, 6]} d={`M ${Y_AXIS_WIDTH} ${y* this.heightScaler} H ${Y_AXIS_WIDTH + this.chartWidth * this.widthScaler}`} /> : null}
+      <Text alignment="right" fill="black" x={Y_AXIS_WIDTH-5} y={y * this.heightScaler - 10} fontSize="16" fontFamily="Arial">{(this.minMaxs.maxValueY-y).toFixed(2)}</Text>
+        </G>
         );
     });
-    this.yAxis = (<Group>
-      <Shape stroke="black" strokeWidth={1} d={`M ${CHART_PADDING + Y_AXIS_WIDTH} ${CHART_PADDING} V ${this.minMaxs.maxValueY * this.heightScaler + CHART_PADDING}`} />
+    this.yAxis = (<G>
+      <Path stroke="black" strokeWidth={1} d={`M ${CHART_PADDING + Y_AXIS_WIDTH} ${CHART_PADDING} V ${this.minMaxs.maxValueY * this.heightScaler + CHART_PADDING}`} />
       {ticks}
-    </Group>);
+    </G>);
   }
 
   _initPanHandler() {
@@ -110,10 +110,12 @@ class ArtyChartyXY extends Component {
       onResponderRelease: (evt) => {
         this.props.data.some((d, idx) => {
             if (Math.sqrt(Math.pow((d.x * this.widthScaler + CHART_PADDING + Y_AXIS_WIDTH) - evt.nativeEvent.locationX, 2) + Math.pow(((this.minMaxs.maxValueY - d.y) * this.heightScaler + CHART_PADDING) - evt.nativeEvent.locationY, 2) < d.value * this.heightScaler)) {
-            Alert.alert('clciked', JSON.stringify(d));
-            this.setState(Object.assign(this.state, {
+            this.setState({
               clickedPointIdx: idx
-            }));
+            });
+            if (this.props.onPointClick) {
+                this.props.onPointClick(idx);
+            }
             return true;
           }
         });
@@ -126,7 +128,7 @@ class ArtyChartyXY extends Component {
     let height = this.props.height || CHART_HEIGHT;
     let scaleFn = this.props.type === 'scatter' ? () => {return this.props.pointRadius ? this.props.pointRadius : 1 * this.state.t} : (d) => {return d * this.state.t};
     points = this.props.data.map((d, idx) => {
-      return <Shape key={idx} d={makeCircle(d.x * this.widthScaler + CHART_PADDING + Y_AXIS_WIDTH, (this.minMaxs.maxValueY - d.y + this.minMaxs.minValueY) * this.heightScaler + CHART_PADDING, scaleFn(d.value))} 
+      return <Path key={idx} d={makeCircle(d.x * this.widthScaler + CHART_PADDING + Y_AXIS_WIDTH, (this.minMaxs.maxValueY - d.y + this.minMaxs.minValueY) * this.heightScaler + CHART_PADDING, scaleFn(d.value))} 
       fill={d.color || this.props.color || 'black'} stroke="black" strokeWidth={this.state.clickedPointIdx === idx ? 5 : 0} />
     });
     
@@ -136,11 +138,11 @@ class ArtyChartyXY extends Component {
       {...this._responder}
        style={[{overflow: 'visible'}, this.props.style]}
        viewBox={this.viewBox}>
-        <Surface width={width} height={height}>
+        <Svg width={width} height={height}>
           {points}
           {this.xAxis}
           {this.yAxis}
-        </Surface>
+        </Svg>
       </View>
     );
   }

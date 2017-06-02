@@ -1,19 +1,20 @@
 import React, {Component} from 'react';
 import {
-  Alert,
-  Animated,
   Dimensions,
-  Image,
   PanResponder,
   StyleSheet,
-  Text,
-  View,
-  ART,
-  TouchableOpacity
+  View
 } from 'react-native';
-const {Surface, Group, Shape, LinearGradient} = ART;
-import {complement, Tweener, AmimatedCirclesMarker, makeBarsChartPath, makeAreaChartPath, makeLineChartPath, makeSplineChartPath, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues, findRectangleIndexContainingPoint, findClosestPointIndexWithinRadius} from '.';
-import {Spring,Bounce,EasingFunctions} from '../../timing-functions';
+import Svg,{
+    Defs,
+    G,
+    LinearGradient,
+    Path,
+    Stop,
+    Text
+} from 'react-native-svg';
+import {complement, Tweener, AmimatedCirclesMarker, makeBars3DChartPath, makeBarsChartPath, makeAreaChartPath, makeLineChartPath, makeSplineChartPath, makeCandlestickChartPath, makeCandlestickChart, inerpolateColorsFixedAlpha, makeSpline, computeSplineControlPoints, makeCircle, getMinMaxValues, getMinMaxValuesCandlestick, getMinMaxValuesRange, getMaxSumStack, getMaxSumBars3d, findRectangleIndexContainingPoint, findClosestPointIndexWithinRadius, makeAreaRangeChartPath, makeLineStepChartPath, makeStackedBarsChartPath} from '.';
+import {Spring,Bounce,EasingFunctions} from '../timing-functions';
 
 const SELCTED_MARKER_ANIMATION_DURATION = 1000;
 const SELCTED_MARKER_ANIMATION_DELAY_1 = SELCTED_MARKER_ANIMATION_DURATION * .2;
@@ -39,13 +40,9 @@ const CHART_HEIGHT_OFFSET = CHART_HEIGHT / 2;
 const DEFAULT_LINE_COLOR = 'rgba(255,255,255,.5)';
 
 class ArtyCharty extends Component {
+
   constructor(props) {
     super(props);
-    this.resetState();
-    console.log('complement', complement('rgba(255,0,0)'));
-  }
-
-  resetState () {
     this.state = {
       trX: 0,
       t: this.props.animated ? 0 : 1,
@@ -58,6 +55,23 @@ class ArtyCharty extends Component {
         r: 0
       }
     };
+    this.maxScroll = 0;
+    this.stopAnimateClickFeedback = false;
+  }
+
+  resetState () {
+    this.setState({
+      trX: 0,
+      t: this.props.animated ? 0 : 1,
+      gradientStops: {},
+      activeMarker: {},
+      clickFeedback: {
+        x: 0,
+        y: 0,
+        o: 0,
+        r: 0
+      }
+    })
     this.maxScroll = 0;
     this.stopAnimateClickFeedback = false;
   }
@@ -82,13 +96,12 @@ class ArtyCharty extends Component {
 
     if (this.props.clickFeedback) {
       this.animateClickFeedbackTweener = new Tweener(CLICK_FEDDBACK_ANIMATION_DURATION, t => {
-            this.setState(Object.assign(this.state, 
-                Object.assign(this.state.clickFeedback, {
+            this.setState(Object.assign(this.state.clickFeedback, {
                   o: 1 - t,
-                  r: 300 * t
+                  r: 100 * t
                 })
-          ));
-      }, EasingFunctions.easeInCubic, false);
+          );
+      }, EasingFunctions.easeOutCubic, false);
     }
     
     // Only call if lowHighCol stuff?????
@@ -110,7 +123,18 @@ class ArtyCharty extends Component {
     this.maxValue = Number.MIN_VALUE;
     this.minValue = Number.MAX_VALUE;
     this.props.data.forEach(d => {
-      let val = getMinMaxValues(d.data);
+      let val;
+      if (d.type === 'candlestick') {
+        val = getMinMaxValuesCandlestick(d.data)
+      } else if (d.type === 'area-range') {
+        val = getMinMaxValuesRange(d.data);
+      } else if (d.type === 'stacked-bars') {
+        val = {maxValue: getMaxSumStack(d.data)};
+      } else if (d.type === 'bars-3d') {
+        val = {maxValue: getMaxSumBars3d(d.data)};
+      } else {
+        val = getMinMaxValues(d.data);
+      }
       d.maxValue = val.maxValue;
       d.minValue = val.minValue;
       this.maxValue = Math.max(this.maxValue, val.maxValue);
@@ -126,7 +150,7 @@ class ArtyCharty extends Component {
     this.animateChartSpring = new Spring({friction: 150, frequency: 500});
     this.animateChartSpring2 = new Spring({friction: 150, frequency: 550, anticipationSize: 50});
     this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
-          this.setState(Object.assign(this.state, {t}));
+          this.setState({t});
     }, EasingFunctions.linear, false);
 
     let ts = [];
@@ -189,10 +213,9 @@ class ArtyCharty extends Component {
         moved = false;
       },
       onPanResponderMove: this.props.noScroll ? ()=>{} : (evt, gestureState) => {
-        // console.log(Math.min(20, Math.max(sX + gestureState.dx, -this.maxScroll - 20)), 'ms', this.maxScroll);
-        this.setState(Object.assign(this.state, {
+        this.setState({
           trX: Math.min(20, Math.max(sX + gestureState.dx, -this.maxScroll - 20))
-        }));
+        });
         moved = true;
       },
       onPanResponderTerminationRequest: (evt, gestureState) => true,
@@ -208,16 +231,25 @@ class ArtyCharty extends Component {
                 this.animateClickFeedback(tmpX - px, tmpY - py + CHART_HEIGHT / 2);
               }
               this.props.data.some((d, idx) => {
-                if (d.type === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
+                if (d.type.slice(0,4) === 'area' || d.type === 'line' || d.type.substr(0, 6) === 'spline') {
                   let closestMarker = findClosestPointIndexWithinRadius(d.markerCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2, MARKER_RADIUS_SQUARED);
                   if (closestMarker !== undefined) {
                     this.onMarkerClick(idx, closestMarker);
                     return true;
                   }
-                } else if (d.type === 'bars') {
+                } else if (d.type.slice(0,4) === 'bars') {
                   let clickedBar = findRectangleIndexContainingPoint(d.barCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
                   if (clickedBar !== undefined) {
                     this.onMarkerClick(idx, clickedBar);
+                    // Only return true if this is the last chart, there might be line charts infront..
+                    if (idx === this.props.data.length-1) {
+                      return true;
+                    }
+                  }
+                } else if (d.type === 'candlestick' || d.type === 'stacked-bars') {
+                  let clickedCandlestick = findRectangleIndexContainingPoint(d.barCords, tmpX - px, tmpY - py + CHART_HEIGHT / 2);
+                  if (clickedCandlestick !== undefined) {
+                    this.onMarkerClick(idx, clickedCandlestick);
                     // Only return true if this is the last chart, there might be line charts infront..
                     if (idx === this.props.data.length-1) {
                       return true;
@@ -251,20 +283,22 @@ componentWillReceiveProps(nextProps) {
 }
 
   componentWillUnmount() {
-    this.animateClickFeedbackTweener.stop();
-    this.animateChartTweener.stop();
+    if (this.animateClickFeedbackTweener) this.animateClickFeedbackTweener.stop();
+    if (this.animateChartTweener) this.animateChartTweener.stop();
   }
 
   onMarkerClick(chartIdx, pointIdx) {
     if (chartIdx !== this.state.activeMarker.chartIdx || pointIdx !== this.state.activeMarker.pointIdx) {
-        this.setState(Object.assign(this.state, {activeMarker: {chartIdx, pointIdx}}));
-        this.props.onMarkerClick(chartIdx, pointIdx);
+        this.setState({activeMarker: {chartIdx, pointIdx}});
+        if (this.props.onMarkerClick) {
+          this.props.onMarkerClick(chartIdx, pointIdx);
+        }
     }
   }
 
   makeChartFillColors() {
     this.props.data.forEach(chart => {
-      if (chart.type === 'bars' || chart.type.slice(-4) === 'area') {
+      if (chart.type === 'bars' || chart.type.slice(-4) === 'area' || chart.type.slice(0,4) === 'area') {
         chart.data.forEach(d => {
            d.fillColors = {
             active: inerpolateColorsFixedAlpha(chart.highCol || chart.lineColor || 'white',
@@ -279,15 +313,36 @@ componentWillReceiveProps(nextProps) {
     });
   }
 
+  // makeGradStops(maxValue, chartIdx) {
+  //   let gradStops = {};
+  //   this.props
+  //     .data[chartIdx].data
+  //     .forEach((d, idx) => {
+  //       let fillColors = d.fillColors ? d.fillColors : {active: 'white', inactive: 'gray'};
+  //       let color = this.state.activeMarker.chartIdx === chartIdx && this.state.activeMarker.pointIdx === idx ? fillColors.active : fillColors.inactive;
+  //       gradStops[(idx / this.props.data[chartIdx].data.length) + (.5 / this.props.data[chartIdx].data.length)] = color;
+  //     });
+  //     return gradStops;
+  // 
+
   makeGradStops(maxValue, chartIdx) {
-    let gradStops = {};
-    this.props
+    return this.props
       .data[chartIdx].data
-      .forEach((d, idx) => {
-        let color = this.state.activeMarker.chartIdx === chartIdx && this.state.activeMarker.pointIdx === idx ? d.fillColors.active : d.fillColors.inactive;
-        gradStops[(idx / this.props.data[chartIdx].data.length) + (.5 / this.props.data[chartIdx].data.length)] = color;
+      .map((d, idx) => {
+        let fillColors = d.fillColors ? d.fillColors : {active: 'white', inactive: 'gray'};
+        let color = this.state.activeMarker.chartIdx === chartIdx && this.state.activeMarker.pointIdx === idx ? fillColors.active : fillColors.inactive;
+        // TO FIX: !!!!!
+        // As a quick fix, added stopOpacity here, as react-native-svg
+        // doesn't support rgba, but uses stopOpacity instead
+        // this is just a fix however, we should be able to do this
+        // more efficient
+        let opacity = 1
+        if (color.slice(0,4) === 'rgba') {
+          opacity = color.split(',')[3].slice(0,-1)
+        }
+        return <Stop key={idx} offset={(idx / this.props.data[chartIdx].data.length).toString()} stopColor={color} stopOpacity={opacity} />
+        //gradStops[(idx / this.props.data[chartIdx].data.length) + (.5 / this.props.data[chartIdx].data.length)] = color;
       });
-      return gradStops;
   }
 
 makeMarkersCoords(chart, width, t) {
@@ -328,6 +383,7 @@ makeMarker(cx, cy, chartIdx, pointIdx) {
   }
 
 makeYaxis(num, minVal, maxVal) {
+  const width = this.props.width || Dimensions.get('window').width
   let topY = (CHART_HEIGHT+CHART_HEIGHT_OFFSET) - this.maxValue * ((CHART_HEIGHT-MARKER_RADIUS)/this.maxValue);
   let bottomY = CHART_HEIGHT+CHART_HEIGHT/2;
   let i;
@@ -336,8 +392,8 @@ makeYaxis(num, minVal, maxVal) {
   let lineDecrement = (maxVal - minVal) / num;
   let lines = [];
   for (i = 0 ; i <= num; i++) {
-    lines.push(<Shape key={i} strokeDash={[0, 0, 4, 6]} stroke="black" strokeWidth={.5}  d={`M 0 ${topY + interval * i} H ${Dimensions.get('window').width}`} />);
-    lines.push(<ART.Text key={1000+i} fill="black" stroke="white" strokeWidth={1} x={0} y={(topY + interval * i) - 22} font="20px Arial">{lineVal.toFixed(2)}</ART.Text>);
+    lines.push(<Path key={i} strokeDash={[0, 0, 4, 6]} stroke="black" strokeWidth={.5}  d={`M 0 ${topY + interval * i} H ${width}`} />);
+    lines.push(<Text key={1000+i} fill="black" stroke="white" strokeWidth={1} x={0} y={(topY + interval * i) - 22} fontSize="20" fontFamily="Arial">{lineVal.toFixed(2)}</Text>);
     lineVal -= lineDecrement;
   }
   return lines;
@@ -349,62 +405,93 @@ animateChart(endTime) {
 
 animateClickFeedback(x, y) {
   this.animateClickFeedbackTweener.stop();
-  this.setState(Object.assign(this.state, {
+  this.setState({
       clickFeedback: {
         x: x,
         y: y,
         o: 0,
         r: 0
       }
-  }));
+  });
   this.animateClickFeedbackTweener.resetAndPlay();
 }
 
 makeLinearGradientForAreaChart(chart, idx, width) {
-  return new LinearGradient(this.makeGradStops(chart.maxValue, idx), 0, 0, width, 0);
+  return <LinearGradient key={idx} id="grad" x1="0" y1="0" x2={width} y2="0">
+            {this.makeGradStops(chart.maxValue, idx)}
+        </LinearGradient>
 }
 
   render() {
-    let width = Dimensions.get('window').width;
+    let width = this.props.width || Dimensions.get('window').width;
+    let linGrads = [];
      let charts = this.props.data.map((chart, idx) =>  {
        let chartData;
        let charts = [];
        let markerCords;
        let makeMarkers = true;
+       let doBreak = false;
+       let rangeChart = false;
        switch (chart.type) {
          case 'area':
             chartData = makeAreaChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen);
+            linGrads.push(this.makeLinearGradientForAreaChart(chart, idx, chartData.width));
             // Max assumes chart doesn't shrink subsequently. If that is the case,weneed to
             // recomputmax for all!!
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
             // this.maxScroll = chartData.maxScroll;
-            charts.push(<Shape key={idx} d={chartData.path}
-              fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)}
+            charts.push(<Path key={idx} d={chartData.path}
+              fill="url(#grad)"
             />);
             if (chart.hideLine) {
               break;
             }
+            doBreak = true;
+          case 'area-range':
+            if (!doBreak) {
+              chartData = makeAreaRangeChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen);
+              linGrads.push(this.makeLinearGradientForAreaChart(chart, idx, chartData.width));
+            this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
+            charts.push(<Path key={idx} d={chartData.path}
+              fill="url(#grad)"
+            />);
+            if (chart.hideLine) {
+              break;
+            }
+            }
           case 'line':
             chartData = makeLineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen);
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
-            charts.push(<Shape
+            charts.push(<Path
                   key={idx + 10000} 
                   d={chartData.path}
                   stroke={chart.lineColor || DEFAULT_LINE_COLOR}
-                  strokeWidth={3} />);
+                  strokeWidth={3}
+                  fill="transparent" />);
             // Make marker coords:
             markerCords = this.makeMarkersCoords(chart, width, this.state.t);
             chart.markerCords = markerCords;
             charts.push(this.makeMarkers(markerCords, idx));
             break;
+          case 'step':
+            chartData = makeLineStepChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen);
+            this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
+            charts.push(<Path
+                  key={idx + 10000} 
+                  d={chartData.path}
+                  stroke={chart.lineColor || DEFAULT_LINE_COLOR}
+                  strokeWidth={3}
+                  fill="transparent" />);
+            break;
           case 'spline-area':
             chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, true);
-              charts.push(<Shape
+            linGrads.push(this.makeLinearGradientForAreaChart(chart, idx, chartData.width));
+              charts.push(<Path
                   key={idx + 30000} 
                   d={chartData.path}
                   stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={0}
-                  fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)} />);
+                  fill="url(#grad)" />);
             if (chart.hideLine) {
               // Make marker coords:
               markerCords = this.makeMarkersCoords(chart, width, this.state.t);
@@ -416,11 +503,12 @@ makeLinearGradientForAreaChart(chart, idx, width) {
           case 'spline':
             chartData = makeSplineChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, false);
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
-            charts.push(<Shape
+            charts.push(<Path
                   key={idx + 10000} 
                   d={chartData.path}
                   stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={3}
+                  fill="transparent"
                    />);
             // Make marker coords:
             if (makeMarkers) {
@@ -429,16 +517,68 @@ makeLinearGradientForAreaChart(chart, idx, width) {
               charts.push(this.makeMarkers(markerCords, idx));
             }
             break;
+          case 'bars-range':
+            rangeChart = true;
           case 'bars':
-          chartData = makeBarsChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, PAD_LEFT);
+          chartData = makeBarsChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, PAD_LEFT, rangeChart);
             chart.barCords = chartData.barCords;
+          linGrads.push(this.makeLinearGradientForAreaChart(chart, idx, chartData.width));
             this.maxScroll = Math.max(this.maxScroll, chartData.maxScroll || 0);
-            charts.push(<Shape
+            charts.push(<Path
                   key={idx + 20000} 
                   d={chartData.path}
                   stroke={chart.lineColor || DEFAULT_LINE_COLOR}
                   strokeWidth={3}
-                  fill={this.makeLinearGradientForAreaChart(chart, idx, chartData.width)} />);
+                  fill={'url(#grad)'} />);
+                  break;
+          case 'stacked-bars':
+            chartData = makeStackedBarsChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, PAD_LEFT, this.props.yAxisLeft.width, true);
+            chart.barCords = chartData.barCords;
+            chartData.path.forEach((d, idx2) => {
+              charts.push(<Path key={idx2 + 20000} 
+                  d={d.path}
+                  fill={d.color}
+                  stroke="red"
+                  strokeWidth={idx === this.state.activeMarker.chartIdx && idx2 === this.state.activeMarker.pointIdx ? 3 : 0} />);
+            });
+            break;
+          case 'bars-3d':
+            chartData = makeBars3DChartPath(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, PAD_LEFT, this.props.yAxisLeft ? this.props.yAxisLeft.width : 0, true);
+            chart.barCords = chartData.barCords;
+            chartData.path.forEach((d, idx2) => {
+              let isActive = idx === this.state.activeMarker.chartIdx && d.pointIdx === this.state.activeMarker.pointIdx;
+              charts.push(<G key={idx2 + 290000} opacity={isActive ? 1 : .75}>
+                <Path 
+                  d={d.main}
+                  fill={d.mainColor}
+                  stroke={complement(d.mainColor)}
+                  strokeWidth={isActive ? 5 : 0} />
+                  <Path 
+                  d={d.side}
+                  fill={d.sideColor}
+                  stroke={complement(d.sideColor)}
+                  strokeWidth={isActive ? 5 : 0} />
+                  <Path 
+                  d={d.top}
+                  fill={d.topColor}
+                  stroke={complement(d.topColor)}
+                  strokeWidth={isActive ? 5 : 0} />
+                  </G>
+                  );
+            });
+            
+            break;
+          case 'candlestick':
+          chartData = makeCandlestickChart(chart, width, this.state.t, this.maxValue, CHART_HEIGHT, CHART_HEIGHT_OFFSET, MARKER_RADIUS, this.pointsOnScreen, PAD_LEFT);
+          chart.barCords = chartData.barCords;
+          chartData.paths.forEach((d, idx2) => {
+            charts.push(<Path
+                  key={idx2 + 80000} 
+                  d={d.pathStr}
+                  stroke={chart.lineColor}
+                  strokeWidth={idx === this.state.activeMarker.chartIdx && idx2 === this.state.activeMarker.pointIdx ? 3 : 1}
+                  fill={d.openHigherThanClose ? chart.fillDown : chart.fillUp} />);
+          });
        }
        return charts;
      });
@@ -447,19 +587,22 @@ makeLinearGradientForAreaChart(chart, idx, width) {
         <View style={[styles.container, {
           transform: [{translateX: this.state.trX}],
           width: width
-        }]}
+        }, this.props.style]}
         ref="chart" >
-          <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
+          <Svg width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
           style={styles.chartSurface}>
           {charts}
-          <Shape d={makeCircle(this.state.clickFeedback.x, this.state.clickFeedback.y, this.state.clickFeedback.r)} fill={`rgba(255,255,255, ${this.state.clickFeedback.o})`} />
-        </Surface>
+          <Defs>
+            {linGrads}
+          </Defs>
+          <Path d={makeCircle(this.state.clickFeedback.x, this.state.clickFeedback.y, this.state.clickFeedback.r)} fill={`rgba(255,255,255, ${this.state.clickFeedback.o.toFixed(3)})`} />
+        </Svg>
         </View>
         <View {...this._panResponder.panHandlers} style={styles.axesContainer}>
-          <Surface width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
+          <Svg width={this.maxScroll + width} height={CHART_HEIGHT+CHART_HEIGHT/2}
           style={styles.chartSurface}>
            {this.yAxis}
-        </Surface>
+        </Svg>
         </View>
       </View>
     );
@@ -475,7 +618,8 @@ const styles = StyleSheet.create({
   chartSurface: {
     backgroundColor: 'rgba(0,0,0,0)',
     overflow: 'visible',
-    marginTop: -CHART_HEIGHT/2
+    marginTop: -CHART_HEIGHT/2,
+    //backgroundColor: 'rgba(0,0,0,.2)'
   },
   axesContainer: {
     position: 'absolute',

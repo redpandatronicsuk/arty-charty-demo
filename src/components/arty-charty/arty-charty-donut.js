@@ -1,19 +1,18 @@
 import React, {Component} from 'react';
 import {
-  Alert,
   Animated,
-  Dimensions,
-  Image,
   Responder,
-  StyleSheet,
-  Text,
   View,
-  ART,
-  TouchableOpacity,
   Easing
 } from 'react-native';
-const {Surface, Group, Shape, LinearGradient} = ART;
-import {Spring,EasingFunctions} from '../../timing-functions';
+import Svg,{
+    Defs,
+    G,
+    LinearGradient,
+    Path,
+    Stop
+} from 'react-native-svg';
+import {Spring,EasingFunctions} from '../timing-functions';
 import {makeArc, computeChartSum, Tweener} from '.';
 
 const CHART_GROW_ANIMATION_DURATION = 3000;
@@ -55,7 +54,7 @@ class ArtyChartyDonut extends Component {
       });
     });
     this.animateChartTweener = new Tweener(CHART_GROW_ANIMATION_DURATION, t => {
-        this.setState(Object.assign(this.state, {t}));
+        this.setState({t});
     }, EasingFunctions.bounce, false);
   }
 
@@ -135,9 +134,9 @@ class ArtyChartyDonut extends Component {
             return true;
           }
         });
-        this.setState(Object.assign(this.state, {
+        this.setState({
           selectedSlice: clickedSlice
-        }));
+        });
         if (this.props.onSliceClick) {
           this.props.onSliceClick(this.slices[clickedSlice].dataSetIdx, this.slices[clickedSlice].pointIdx);
         }
@@ -152,13 +151,13 @@ class ArtyChartyDonut extends Component {
   render() {
     let size = this.maxR;
     let r = size * .5;
-    let donutSlices = [];
-    this.slices.forEach((d, idx) => {
-      donutSlices.push(<Shape key={idx}
+    let donutSlices = this.slices.map((d, idx) => {
+      return <Path key={idx}
           d={makeArc(r, r,this.props.data.data[d.dataSetIdx].r/2 * .9, d.startAngle, d.startAngle + EasingFunctions.bounce(this.state.t) * (d.arcLength-1e-12), false)}
           stroke={this.props.data.data[d.dataSetIdx].data[d.pointIdx].color}
           strokeWidth={this.state.selectedSlice === idx ? this.strokeWidth + 5 : this.strokeWidth/2}
-           />);
+          fill="transparent"
+           />;
     });
     return(
       <Animated.View
@@ -172,15 +171,12 @@ class ArtyChartyDonut extends Component {
             outputRange: ['0deg', '360deg']
           })}, {scale: this.state.scale}]
       },this.props.style]}>
-        <Surface width={size} height={size} style={{overflow: 'visible'}} >
+        <Svg width={size} height={size} style={{overflow: 'visible'}} >
           {donutSlices}
-        </Surface>
+        </Svg>
       </Animated.View>
     );
   }
 }
-
-const styles = StyleSheet.create({
-});
 
 export default ArtyChartyDonut;

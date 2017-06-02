@@ -840,7 +840,7 @@ function parseColor(col) {
 }
 
 function RGBobj2string(obj) {
-  return `rgba(${obj.r},${obj.g},${obj.b},${obj.a})`;
+  return `rgba(${Math.round(obj.r)},${Math.round(obj.g)},${Math.round(obj.b)},${obj.a.toFixed(3)})`;
 }
 
 /**
@@ -850,9 +850,9 @@ function inerpolateColors(col1, col2, amount) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
   return RGBobj2string({
-    r: Math.round(Math.min(255, col1rgb.r * amount + col2rgb.r * (1-amount))),
-    g: Math.round(Math.min(255, col1rgb.g * amount + col2rgb.g * (1-amount))),
-    b: Math.round(Math.min(255, col1rgb.b * amount + col2rgb.b * (1-amount))),
+    r: Math.min(255, col1rgb.r * amount + col2rgb.r * (1-amount)),
+    g: Math.min(255, col1rgb.g * amount + col2rgb.g * (1-amount)),
+    b: Math.min(255, col1rgb.b * amount + col2rgb.b * (1-amount)),
     a: Math.min(1, col1rgb.a * amount + col2rgb.a * (1-amount))
   });
 }
@@ -864,9 +864,9 @@ function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
   let col1rgb = parseColor(col1);
   let col2rgb = parseColor(col2);
   return RGBobj2string({
-    r: Math.round(Math.min(255, col1rgb.r * amount + col2rgb.r * Math.max(0,1-amount))),
-    g: Math.round(Math.min(255, col1rgb.g * amount + col2rgb.g * Math.max(0,1-amount))),
-    b: Math.round(Math.min(255, col1rgb.b * amount + col2rgb.b * Math.max(0,1-amount))),
+    r: Math.min(255, col1rgb.r * amount + col2rgb.r * Math.max(0,1-amount)),
+    g: Math.min(255, col1rgb.g * amount + col2rgb.g * Math.max(0,1-amount)),
+    b: Math.min(255, col1rgb.b * amount + col2rgb.b * Math.max(0,1-amount)),
     a: alpha
   });
 }
@@ -877,9 +877,9 @@ function inerpolateColorsFixedAlpha(col1, col2, amount, alpha) {
 function shadeColor(col, amount) {
   let col1rgb = parseColor(col);
   return RGBobj2string({
-    r: Math.round(Math.min(255, col1rgb.r * amount + 0 * Math.max(0,1-amount))),
-    g: Math.round(Math.min(255, col1rgb.g * amount + 0 * Math.max(0,1-amount))),
-    b: Math.round(Math.min(255, col1rgb.b * amount + 0 * Math.max(0,1-amount))),
+    r: Math.min(255, col1rgb.r * amount + 0 * Math.max(0,1-amount)),
+    g: Math.min(255, col1rgb.g * amount + 0 * Math.max(0,1-amount)),
+    b: Math.min(255, col1rgb.b * amount + 0 * Math.max(0,1-amount)),
     a: col1rgb.a
   });
 }

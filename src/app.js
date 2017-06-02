@@ -10,11 +10,17 @@ import {
   Text,
   View,
   TouchableOpacity,
-  StatusBar,
-  ART
+  StatusBar
 } from 'react-native';
+import Svg,{
+    Defs,
+    G,
+    LinearGradient,
+    Path,
+    Stop,
+    Rect
+} from 'react-native-svg';
 import {ArtyCharty, ArtyChartyXY, AmimatedCirclesMarker, ArtyChartyDonut, ArtyChartyPie, ArtySparkyLine, ArtySparkyPie} from './components';
-const {Surface} = ART;
 const monthNames = [
   "January",
   "February",
@@ -173,6 +179,17 @@ function formatRawData(arr, txt) {
   });
 }
 
+function formatRawDataAddLow(arr, txt) {
+  return arr.map((d,idx) => {
+    return {
+      date: new Date(0,idx,1),
+      value: d,
+      valueLow: d - 3 - Math.random() * 5,
+      txt: txt(d)
+    };
+  });
+}
+
 function formatDonutData(arr, data) {
   return arr.map((d,idx) => {
     let out = {data: []};
@@ -183,7 +200,6 @@ function formatDonutData(arr, data) {
         color: data[idx2].color,
       });
     });
-    console.log('donut data', out);
     return out;
   });
 }
@@ -232,13 +248,13 @@ class App extends Component {
         Temperature:
          [
           {
-              type: 'spline-area',
+              type: 'area-range',
               label: 'High temperature',
               lineColor: 'rgba(255,0,0,.5)',
               drawChart: true,
               highCol: 'rgb(255,0,0)',
               lowCol: 'rgb(255,165,0)',
-              data: formatRawData(weatherData[cityName].temp.high, (val) => {
+              data: formatRawDataAddLow(weatherData[cityName].temp.high, (val) => {
                 return ('0' + val).slice(-2) + '°';
               })
           },
@@ -433,7 +449,6 @@ class App extends Component {
   }
 
   onMarkerClick(chartIdx, pointIdx) {
-    console.log('In call abck', chartIdx, pointIdx);
     if (chartIdx !== this.state.activeMarker.chartIdx
      || pointIdx !== this.state.activeMarker.pointIdx) {
       this.setState(Object.assign(this.state, {activeMarker: {chartIdx, pointIdx}}));
@@ -611,17 +626,89 @@ class App extends Component {
             opacity: this.state.topTextOpacity
           }
         ]}>{this.state.topText}</Animated.Text>
+        {/*
         <ArtyCharty
-          data={this.data[this.state.selectedCity][this.state.chartName]}
-          pointsOnScreen={this.state.pointsOnScreen}
-          noScroll={this.state.pointsOnScreen >= 12}
-          clickFeedback={true}
-          yAxisLeft={{numberOfTicks: 5}}
-          interactive={true}
-          animated={true}
-          onMarkerClick={this
-          .onMarkerClick
-          .bind(this)}/>
+        clickFeedback={true}
+        interactive={true}
+        animated={true}
+        data={[{
+            type: 'candlestick',
+            lineColor: 'fuchsia',
+            fillUp:  'orange',
+            fillDown: 'rgba(0,0,0,0)',
+            drawChart: true,
+            data: Array.from(Array(20)).map(() => {
+              let rand = Math.random() + 2, open, close, low, high;
+              if (Math.random() > .5) {
+                open = rand + Math.random();
+                high = open + Math.random();
+                close = rand - Math.random();
+                low = close - Math.random();
+              } else {
+                open = rand - Math.random();
+                low = open - Math.random();
+                close = rand + Math.random();
+                high = close + Math.random();
+              }
+              return {open, close, low, high};
+            })},
+            {
+            type: 'candlestick',
+            lineColor: 'blue',
+            fillUp:  'green',
+            fillDown: 'red',
+            drawChart: true,
+            data: Array.from(Array(20)).map(() => {
+              let rand = Math.random() + 7, open, close, low, high;
+              if (Math.random() > .5) {
+                open = rand + Math.random();
+                high = open + Math.random();
+                close = rand - Math.random();
+                low = close - Math.random();
+              } else {
+                open = rand - Math.random();
+                low = open - Math.random();
+                close = rand + Math.random();
+                high = close + Math.random();
+              }
+              return {open, close, low, high};
+            })}
+            ]} />
+
+
+              <ArtyCharty
+        interactive={true}
+        clickFeedback={true}
+        animated={true}
+        data={[{
+            type: 'spline',
+            lineColor: 'fuchsia',
+            highCol: 'rgba(23,43,200,.2)',
+            data: Array.from(Array(20)).map(() => {
+            let rand = Math.random() + 3;
+            return {value: rand, valueLow: rand - Math.random() - .5};
+            })}
+            ]} />
+
+
+            */}
+
+            
+
+       {
+          <ArtyCharty
+           data={this.data[this.state.selectedCity][this.state.chartName]}
+           pointsOnScreen={this.state.pointsOnScreen}
+           noScroll={this.state.pointsOnScreen >= 12}
+           clickFeedback={true}
+           yAxisLeft={{numberOfTicks: 5}}
+           interactive={true}
+           animated={true}
+           onMarkerClick={this
+           .onMarkerClick
+           .bind(this)}/>
+       }
+          
           {
             this.state.activeMarker.chartIdx > -1 ?
             <View style={styles.bottomTextContainer}>
@@ -721,10 +808,10 @@ class App extends Component {
             this.data[this.state.selectedCity].sunnyVsCloudyDaylightPercentageMonthly
         }
         onSliceClick={(dataSetIdx, pointIdx) => {
-          this.setState(Object.assign(this.state, {
+          this.setState({
             donutChartText: `${monthNames[dataSetIdx]} avg. sunny hours: ${weatherData[this.state.selectedCity].sunnyVsCloudyDaylightPercentageMonthly[dataSetIdx][0]}, avg. cloudy hours: ${weatherData[this.state.selectedCity].sunnyVsCloudyDaylightPercentageMonthly[dataSetIdx][1]}`,
             donutChartTextShadowColor: pointIdx === 0 ? 'yellow' : 'grey'
-          }));
+          });
         }}
           />
           <Text style={{
