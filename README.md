@@ -1,5 +1,7 @@
 #ARTy Charty
 ## A React Native charting library using React Native ARTy
+
+[![Greenkeeper badge](https://badges.greenkeeper.io/redpandatronicsuk/arty-charty-demo.svg)](https://greenkeeper.io/)
 ![Demo video](https://github.com/redpandatronicsuk/arty-charty-demo/raw/master/stuff/output-5fps.gif)
 
 Demo app showcasing charts from ARTy Charty React Native plugin.
